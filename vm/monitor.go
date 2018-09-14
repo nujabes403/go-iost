@@ -14,6 +14,7 @@ import (
 	"github.com/iost-official/Go-IOS-Protocol/vm/host"
 	"github.com/iost-official/Go-IOS-Protocol/vm/native"
 	"github.com/iost-official/Go-IOS-Protocol/vm/v8vm"
+	"time"
 )
 
 var (
@@ -79,8 +80,10 @@ func (m *Monitor) Call(h *host.Host, contractName, api string, args ...interface
 			panic(err)
 		}
 	}
+	t0 := time.Now().Nanosecond()
 	rtn, cost, err = vm.LoadAndCall(h, c, api, args...)
-	fmt.Println("monitor call err = ", err, api, c.Code)
+	t1 := time.Now().Nanosecond()
+	fmt.Println("monitor call err = ", err, api, c.Code, ", time =", t1-t0)
 	if cost == nil {
 		if strings.HasPrefix(contractName, "Contract") {
 			ilog.Fatalf("will return nil cost : %v.%v", contractName, api)
