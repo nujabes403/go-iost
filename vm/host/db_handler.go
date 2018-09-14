@@ -1,8 +1,10 @@
 package host
 
 import (
+	"fmt"
 	"github.com/iost-official/Go-IOS-Protocol/core/contract"
 	"github.com/iost-official/Go-IOS-Protocol/vm/database"
+	"time"
 )
 
 // DBHandler struct {
@@ -19,10 +21,13 @@ func NewDBHandler(h *Host) DBHandler {
 
 // Put put kv to db
 func (h *DBHandler) Put(key string, value interface{}) *contract.Cost {
+	t0 := time.Now().Nanosecond()
 	h.h.db.Put(
 		h.modifyKey(key),
 		database.MustMarshal(value),
 	)
+	t1 := time.Now().Nanosecond()
+	fmt.Println("host put key = ", key, ", time = ", t1-t0)
 	return PutCost
 }
 
