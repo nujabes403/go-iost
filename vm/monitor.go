@@ -9,6 +9,7 @@ import (
 
 	"sync"
 
+	"fmt"
 	"github.com/iost-official/Go-IOS-Protocol/ilog"
 	"github.com/iost-official/Go-IOS-Protocol/vm/host"
 	"github.com/iost-official/Go-IOS-Protocol/vm/native"
@@ -79,6 +80,7 @@ func (m *Monitor) Call(h *host.Host, contractName, api string, args ...interface
 		}
 	}
 	rtn, cost, err = vm.LoadAndCall(h, c, api, args...)
+	fmt.Println("monitor call err = ", err, api, c.Code)
 	if cost == nil {
 		if strings.HasPrefix(contractName, "Contract") {
 			ilog.Fatalf("will return nil cost : %v.%v", contractName, api)

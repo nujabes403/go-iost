@@ -3,6 +3,7 @@ package native
 import (
 	"errors"
 
+	"fmt"
 	"github.com/bitly/go-simplejson"
 	"github.com/iost-official/Go-IOS-Protocol/core/contract"
 	"github.com/iost-official/Go-IOS-Protocol/vm/host"
@@ -188,6 +189,7 @@ var (
 			con.ID = actID
 
 			cost2, err := h.SetCode(con)
+			fmt.Println("host set code failed, err = ", err)
 			cost.AddAssign(cost2)
 			return []interface{}{actID}, cost, err
 		},

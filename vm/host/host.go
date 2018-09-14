@@ -5,6 +5,7 @@ import (
 
 	"encoding/json"
 
+	"fmt"
 	"github.com/iost-official/Go-IOS-Protocol/core/contract"
 	"github.com/iost-official/Go-IOS-Protocol/core/tx"
 	"github.com/iost-official/Go-IOS-Protocol/ilog"
@@ -116,6 +117,7 @@ func (h *Host) CallWithReceipt(contractName, api string, args ...interface{}) ([
 // SetCode set code to storage
 func (h *Host) SetCode(c *contract.Contract) (*contract.Cost, error) {
 	code, err := h.monitor.Compile(c)
+	fmt.Println("host compile err = ", err, c.Code)
 	if err != nil {
 		return CompileErrCost, err
 	}
@@ -135,6 +137,7 @@ func (h *Host) SetCode(c *contract.Contract) (*contract.Cost, error) {
 	h.db.SetContract(c)
 
 	_, cost, err := h.monitor.Call(h, c.ID, "init")
+	fmt.Println("host call err = ", err)
 
 	cost.AddAssign(CodeSavageCost(l))
 
