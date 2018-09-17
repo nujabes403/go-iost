@@ -29,6 +29,7 @@ type Status struct {
 // ReceiptType type of single receipt
 type ReceiptType int32
 
+// ReceiptType enum
 const (
 	SystemDefined ReceiptType = iota // system receipt, recording info of calling a method
 	UserDefined                      // user defined receipt, usually a json string
@@ -40,6 +41,7 @@ type Receipt struct {
 	Content string      // can be a raw string or a json string
 }
 
+// nolint
 // TxReceipt Transaction Receipt 实现
 type TxReceipt struct {
 	TxHash   []byte
