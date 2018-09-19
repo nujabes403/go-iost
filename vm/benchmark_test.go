@@ -1,6 +1,8 @@
 package vm
 
 import (
+	"log"
+	"runtime/pprof"
 	"testing"
 
 	"os"
@@ -25,7 +27,7 @@ func benchInit() (Engine, *database.Visitor) {
 	}
 
 	vi := database.NewVisitor(0, mvccdb)
-	vi.SetBalance(testID[0], 1000000)
+	vi.SetBalance(testID[0], 10000000000)
 	vi.SetContract(systemContract)
 	vi.Commit()
 
@@ -48,7 +50,25 @@ func cleanUp() {
 	os.RemoveAll("mvcc")
 }
 
+func TestNativeTransfer(t *testing.T) {
+	e, _ := benchInit()
+
+	act := tx.NewAction("iost.system", "Transfer", fmt.Sprintf(`["%v","%v", 100]`, testID[0], testID[2]))
+	trx, err := MakeTx(act)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Exec(trx)
+	cleanUp()
+}
+
 func BenchmarkNative_Transfer(b *testing.B) { // 21400 ns/op
+	f, err := os.Create("cpu.out")
+	if err != nil {
+		log.Fatal(err)
+	}
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 	e, _ := benchInit()
 
 	act := tx.NewAction("iost.system", "Transfer", fmt.Sprintf(`["%v","%v", 100]`, testID[0], testID[2]))

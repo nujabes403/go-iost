@@ -19,41 +19,34 @@ import (
 
 // TxPImpl defines all the API of txpool package.
 type TxPImpl struct {
-	chP2PTx chan p2p.IncomingMessage
-	chTx    chan *tx.Tx
-
-	global     global.BaseVariable
-	blockCache blockcache.BlockCache
-	p2pService p2p.Service
-
-	forkChain *forkChain
-	blockList *sync.Map
-	// pendingTx *sync.Map
-	pendingTx *SortedTxMap
-
+	global           global.BaseVariable
+	blockCache       blockcache.BlockCache
+	p2pService       p2p.Service
+	forkChain        *forkChain
+	blockList        *sync.Map
+	pendingTx        *SortedTxMap
 	mu               sync.RWMutex
+	chP2PTx          chan p2p.IncomingMessage
+	chTx             chan *tx.Tx
 	quitGenerateMode chan struct{}
 	quitCh           chan struct{}
 }
 
 // NewTxPoolImpl returns a default TxPImpl instance.
-func NewTxPoolImpl(global global.BaseVariable, blockCache blockcache.BlockCache, p2ps p2p.Service) (*TxPImpl, error) {
+func NewTxPoolImpl(global global.BaseVariable, blockCache blockcache.BlockCache, p2pService p2p.Service) (*TxPImpl, error) {
 	p := &TxPImpl{
+		global:           global,
 		blockCache:       blockCache,
-		chTx:             make(chan *tx.Tx, 102400),
+		p2pService:       p2pService,
 		forkChain:        new(forkChain),
 		blockList:        new(sync.Map),
 		pendingTx:        NewSortedTxMap(),
-		global:           global,
-		p2pService:       p2ps,
-		chP2PTx:          p2ps.Register("TxPool message", p2p.PublishTxRequest),
+		chP2PTx:          p2pService.Register("txpool message", p2p.PublishTx),
+		chTx:             make(chan *tx.Tx, 102400),
 		quitGenerateMode: make(chan struct{}),
 		quitCh:           make(chan struct{}),
 	}
 	p.forkChain.NewHead = blockCache.Head()
-	if p.forkChain.NewHead == nil {
-		return nil, errors.New("failed to head")
-	}
 	close(p.quitGenerateMode)
 	return p, nil
 }
@@ -66,7 +59,6 @@ func (pool *TxPImpl) Start() error {
 
 // Stop stops all the jobs.
 func (pool *TxPImpl) Stop() {
-	ilog.Infof("TxPImpl Stop")
 	close(pool.quitCh)
 }
 
@@ -77,9 +69,7 @@ func (pool *TxPImpl) loop() {
 		}
 		time.Sleep(time.Second)
 	}
-
 	pool.initBlockTx()
-
 	workerCnt := (runtime.NumCPU() + 1) / 2
 	if workerCnt == 0 {
 		workerCnt = 1
@@ -98,7 +88,7 @@ func (pool *TxPImpl) loop() {
 			metricsReceivedTxCount.Add(1, map[string]string{"from": "p2p"})
 
 			if ret := pool.addTx(tr); ret == Success {
-				pool.p2pService.Broadcast(tr.Encode(), p2p.PublishTxRequest, p2p.NormalMessage)
+				pool.p2pService.Broadcast(tr.Encode(), p2p.PublishTx, p2p.NormalMessage)
 			}
 
 		case <-clearTx.C:
@@ -185,7 +175,7 @@ func (pool *TxPImpl) AddTx(t *tx.Tx) TAddTx {
 	}
 
 	if r = pool.addTx(t); r == Success {
-		pool.p2pService.Broadcast(t.Encode(), p2p.PublishTxRequest, p2p.NormalMessage)
+		pool.p2pService.Broadcast(t.Encode(), p2p.PublishTx, p2p.NormalMessage)
 		metricsReceivedTxCount.Add(1, map[string]string{"from": "rpc"})
 	}
 
@@ -348,13 +338,11 @@ func (pool *TxPImpl) createTxMapToBlock(tm *sync.Map, blockHash []byte) bool {
 func (pool *TxPImpl) initBlockTx() {
 	chain := pool.global.BlockChain()
 	timeNow := time.Now().UnixNano()
-
 	for i := chain.Length() - 1; i > 0; i-- {
 		blk, err := chain.GetBlockByNumber(i)
 		if err != nil {
 			return
 		}
-
 		t := pool.slotToNSec(blk.Head.Time)
 		if timeNow-t <= filterTime {
 			pool.addBlock(blk)
@@ -388,8 +376,7 @@ func (pool *TxPImpl) verifyTx(t *tx.Tx) TAddTx {
 }
 
 func (pool *TxPImpl) slotToNSec(t int64) int64 {
-	slot := common.Timestamp{Slot: t}
-	return slot.ToUnixSec() * int64(time.Second)
+	return common.SlotLength * t * int64(time.Second)
 }
 
 func (pool *TxPImpl) addBlock(linkedBlock *block.Block) error {

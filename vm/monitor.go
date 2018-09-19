@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/iost-official/Go-IOS-Protocol/core/contract"
+	"github.com/iost-official/Go-IOS-Protocol/ilog"
 	"github.com/iost-official/Go-IOS-Protocol/vm/host"
 	"github.com/iost-official/Go-IOS-Protocol/vm/native"
 	"github.com/iost-official/Go-IOS-Protocol/vm/v8vm"
@@ -71,7 +72,7 @@ func (m *Monitor) Call(h *host.Host, contractName, api string, jarg string) (rtn
 
 	h.Context().Set("contract_name", contractName)
 	h.Context().Set("abi_name", api)
-
+	ilog.Error("before load vm")
 	vm, ok := m.vms[c.Info.Lang]
 	if !ok {
 		vm = Factory(c.Info.Lang)
@@ -81,13 +82,16 @@ func (m *Monitor) Call(h *host.Host, contractName, api string, jarg string) (rtn
 			panic(err)
 		}
 	}
+	ilog.Error("before LoadAndCall")
+	ilog.Error("api", api)
 	rtn, cost, err = vm.LoadAndCall(h, c, api, args...)
-
+	ilog.Error("after LoadAndCall")
 	payment, ok := h.Context().GValue("abi_payment").(int)
 	if !ok {
 		payment = int(abi.Payment)
 	}
 	var gasPrice = h.Context().Value("gas_price").(int64)
+	ilog.Error("before payment == 1")
 
 	if payment == 1 &&
 		abi.GasPrice > gasPrice &&

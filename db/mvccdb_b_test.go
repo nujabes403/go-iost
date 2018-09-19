@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/iost-official/Go-IOS-Protocol/ilog"
 )
 
 const (
@@ -12,6 +14,7 @@ const (
 )
 
 func BenchmarkMVCCDBPut(b *testing.B) {
+	ilog.Stop()
 	rand.Seed(time.Now().UnixNano())
 
 	mvccdb, err := NewMVCCDB(DBPATH)

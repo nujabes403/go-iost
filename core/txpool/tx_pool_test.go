@@ -6,6 +6,8 @@ import (
 
 	"os"
 
+	"sync"
+
 	. "github.com/golang/mock/gomock"
 	"github.com/iost-official/Go-IOS-Protocol/account"
 	"github.com/iost-official/Go-IOS-Protocol/common"
@@ -21,7 +23,6 @@ import (
 	"github.com/iost-official/Go-IOS-Protocol/p2p/mocks"
 	"github.com/iost-official/Go-IOS-Protocol/vm/database"
 	. "github.com/smartystreets/goconvey/convey"
-	"sync"
 )
 
 var (
@@ -761,7 +762,7 @@ func genTx(a *account.Account, expirationIter int64) *tx.Tx {
 func genTxMsg(a *account.Account, expirationIter int64) *p2p.IncomingMessage {
 	t := genTx(a, expirationIter)
 
-	broadTx := p2p.NewIncomingMessage("test", t.Encode(), p2p.PublishTxRequest)
+	broadTx := p2p.NewIncomingMessage("test", t.Encode(), p2p.PublishTx)
 
 	return broadTx
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/iost-official/Go-IOS-Protocol/db/kv"
 	"github.com/iost-official/Go-IOS-Protocol/db/mvcc"
+	"github.com/iost-official/Go-IOS-Protocol/ilog"
 )
 
 //go:generate mockgen -destination mocks/mock_mvccdb.go -package db_mock github.com/iost-official/Go-IOS-Protocol/db MVCCDB
@@ -214,6 +215,7 @@ func (m *CacheMVCCDB) Get(table string, key string) (string, error) {
 
 // Put will insert the key-value pair into the table
 func (m *CacheMVCCDB) Put(table string, key string, value string) error {
+	ilog.Error("Put in CacheMVCCDB")
 	if !m.isValidTable(table) {
 		return ErrTableNotValid
 	}

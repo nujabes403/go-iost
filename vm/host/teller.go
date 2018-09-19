@@ -117,6 +117,7 @@ func (h *Teller) TotalServi() (ts int64, cost *contract.Cost) {
 // Transfer ...
 func (h *Teller) Transfer(from, to string, amount int64) (*contract.Cost, error) {
 	//ilog.Debugf("amount : %v", amount)
+	ilog.Error(from, to, amount)
 	if amount <= 0 {
 		return CommonErrorCost(1), ErrTransferNegValue
 	}
@@ -169,14 +170,16 @@ func (h *Teller) DoPay(witness string, gasPrice int64) error {
 	if gasPrice < 0 {
 		panic("gas_price error")
 	}
-
+	ilog.Error("in DoPay", h.cost)
 	for k, c := range h.cost {
 		fee := gasPrice * c.ToGas()
 		if fee == 0 {
 			continue
 		}
 		bfee := fee / 10
+		ilog.Error(k)
 		if strings.HasPrefix(k, "IOST") {
+			ilog.Error()
 			err := h.transfer(k, witness, fee-bfee)
 			if err != nil {
 				return err
