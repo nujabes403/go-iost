@@ -11,8 +11,6 @@ import (
 
 	"os"
 
-	"strconv"
-
 	"github.com/iost-official/Go-IOS-Protocol/account"
 	"github.com/iost-official/Go-IOS-Protocol/common"
 	"github.com/iost-official/Go-IOS-Protocol/consensus/verifier"
@@ -37,7 +35,7 @@ var (
 )
 
 func generateBlock(account *account.Account, txPool txpool.TxPool, db db.MVCCDB) (*block.Block, error) {
-	f, err := os.Create(strconv.Itoa(int(time.Now().Unix() / common.SlotLength)))
+	f, err := os.Create(fmt.Sprintf("/var/lib/iserver/%d.prof", time.Now().Unix()))
 	if err != nil {
 		log.Fatal(err)
 	}
