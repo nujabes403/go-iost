@@ -129,6 +129,7 @@ func (p *Peer) newStream() (libnet.Stream, error) {
 		return nil, err
 	}
 	p.streamCount++
+	go p.readLoop(stream)
 	return stream, nil
 }
 
