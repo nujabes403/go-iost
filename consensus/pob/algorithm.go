@@ -2,10 +2,16 @@ package pob
 
 import (
 	"errors"
+	"log"
+	"runtime/pprof"
 	"time"
 
 	"fmt"
 	"strings"
+
+	"os"
+
+	"strconv"
 
 	"github.com/iost-official/Go-IOS-Protocol/account"
 	"github.com/iost-official/Go-IOS-Protocol/common"
@@ -31,6 +37,12 @@ var (
 )
 
 func generateBlock(account *account.Account, txPool txpool.TxPool, db db.MVCCDB) (*block.Block, error) {
+	f, err := os.Create(strconv.Itoa(int(time.Now().Unix() / common.SlotLength)))
+	if err != nil {
+		log.Fatal(err)
+	}
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 	ilog.Info("generate Block start")
 	limitTime := time.NewTimer(common.SlotLength / 3 * time.Second)
 	txIter, head := txPool.TxIterator()
