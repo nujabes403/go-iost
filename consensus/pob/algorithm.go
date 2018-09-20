@@ -103,10 +103,10 @@ L:
 			} else {
 				delList = append(delList, t)
 			}
-			if len(blk.Txs) >= txLimit {
-				ilog.Error("blk.Txs arrive limit")
-				break L
-			}
+			/*          if len(blk.Txs) >= txLimit { */
+			// ilog.Error("blk.Txs arrive limit")
+			// break L
+			/* } */
 			step2 := time.Now()
 			t, ok = txIter.Next()
 			step3 := time.Now()
