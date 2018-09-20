@@ -31,7 +31,6 @@ var (
 )
 
 func generateBlock(account *account.Account, txPool txpool.TxPool, db db.MVCCDB) (*block.Block, error) {
-
 	ilog.Info("generate Block start")
 	limitTime := time.NewTimer(common.SlotLength / 3 * time.Second)
 	txIter, head := txPool.TxIterator()
@@ -95,6 +94,7 @@ L:
 				delList = append(delList, t)
 			}
 			if len(blk.Txs) >= txLimit {
+				ilog.Error("blk.Txs arrive limit")
 				break L
 			}
 			step2 := time.Now()
@@ -124,7 +124,7 @@ L:
 	}
 	blk.Sign = account.Sign(blk.HeadHash())
 	db.Tag(string(blk.HeadHash()))
-
+	ilog.Error("metricsTxSize", blk.Txs)
 	metricsGeneratedBlockCount.Add(1, nil)
 	metricsTxSize.Set(float64(len(blk.Txs)), nil)
 	go txPool.DelTxList(delList)
