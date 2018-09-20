@@ -72,6 +72,7 @@ func generateBlock(account *account.Account, txPool txpool.TxPool, db db.MVCCDB)
 	t, ok := txIter.Next()
 	delList := []*tx.Tx{}
 	var vmExecTime, iterTime, i, j int64
+	ilog.Error("ok", ok)
 L:
 	for ok {
 		select {
