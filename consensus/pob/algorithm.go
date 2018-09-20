@@ -94,7 +94,7 @@ L:
 			} else {
 				delList = append(delList, t)
 			}
-			if len(blk.Txs) > txLimit {
+			if len(blk.Txs) >= txLimit {
 				break L
 			}
 			step2 := time.Now()
