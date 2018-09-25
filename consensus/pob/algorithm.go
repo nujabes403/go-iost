@@ -154,6 +154,7 @@ func verifyBasics(head *block.BlockHead, signature *crypto.Signature) error {
 }
 
 func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool txpool.TxPool, db db.MVCCDB) error {
+	ilog.Infof("[pob] verifyBlockHead start, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 	err := verifier.VerifyBlockHead(blk, parent, lib)
 	if err != nil {
 		return err
@@ -176,6 +177,7 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 			return fmt.Errorf("vote was incorrect, status:%v", blk.Receipts[0].Status)
 		}
 	}
+	ilog.Infof("[pob] verify tx in txpool start, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 
 	for _, tx := range blk.Txs {
 		exist, _ := txPool.ExistTxs(tx.Hash(), parent)
@@ -190,6 +192,7 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 			return errTxTooOld
 		}
 	}
+	ilog.Infof("[pob] verify tx in txpool end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 
 	return verifier.VerifyBlockWithVM(blk, db)
 }
