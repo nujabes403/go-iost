@@ -392,7 +392,7 @@ func (p *PoB) handleRecvBlock(blk *block.Block) error {
 	if err != nil {
 		return err
 	}
-	ilog.Infof("[pob] verify new block end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
+	ilog.Infof("[pob] verifyBasics end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 	parent, err := p.blockCache.Find(blk.Head.ParentHash)
 	p.blockCache.Add(blk)
 	ilog.Infof("[pob] add into blockCache end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
