@@ -281,7 +281,9 @@ func (logger *Logger) genMsg(level Level, log string) {
 	buf.Write(levelBytes[level])
 	buf.WriteString(" ")
 	buf.WriteString(time.Now().In(cstZone).Format("2006-01-02 15:04:05.000"))
+	buf.WriteString(" ")
 	buf.WriteString(strconv.Itoa(int(time.Now().Unix() / 3)))
+	buf.WriteString(" ")
 	buf.WriteString(strconv.Itoa(int(time.Now().Unix() % 3)))
 	if logger.showLocation {
 		buf.WriteString(" ")
