@@ -14,8 +14,9 @@ import (
 var (
 	clearInterval = 10 * time.Second
 	// Expiration is the transaction expiration
-	Expiration = int64(90 * time.Second)
-	filterTime = int64(90 * time.Second)
+	Expiration  = int64(90 * time.Second)
+	filterTime  = int64(90 * time.Second)
+	maxCacheTxs = 30000
 
 	metricsReceivedTxCount      = metrics.NewCounter("iost_tx_received_count", []string{"from"})
 	metricsGetPendingTxTime     = metrics.NewGauge("iost_get_pending_tx_time", nil)
@@ -67,6 +68,8 @@ const (
 	DupError
 	// GasPriceError ...
 	GasPriceError
+	// CacheFullError ...
+	CacheFullError
 )
 
 type forkChain struct {
@@ -141,6 +144,7 @@ func (b *blockTx) existTx(hash []byte) bool {
 	return r
 }
 
+// SortedTxMap is a red black tree of tx.
 type SortedTxMap struct {
 	tree  *redblacktree.Tree
 	txMap map[string]*tx.Tx
@@ -156,6 +160,7 @@ func compareTx(a, b interface{}) int {
 	return int(txa.GasPrice - txb.GasPrice)
 }
 
+// NewSortedTxMap returns a new SortedTxMap instance.
 func NewSortedTxMap() *SortedTxMap {
 	return &SortedTxMap{
 		tree:  redblacktree.NewWith(compareTx),
@@ -164,12 +169,14 @@ func NewSortedTxMap() *SortedTxMap {
 	}
 }
 
+// Get returns a tx of hash.
 func (st *SortedTxMap) Get(hash []byte) *tx.Tx {
 	st.rw.RLock()
 	defer st.rw.RUnlock()
 	return st.txMap[string(hash)]
 }
 
+// Add adds a tx in SortedTxMap.
 func (st *SortedTxMap) Add(tx *tx.Tx) {
 	st.rw.Lock()
 	st.tree.Put(tx, true)
@@ -177,6 +184,7 @@ func (st *SortedTxMap) Add(tx *tx.Tx) {
 	st.rw.Unlock()
 }
 
+// Del deletes a tx in SortedTxMap.
 func (st *SortedTxMap) Del(hash []byte) {
 	st.rw.Lock()
 	defer st.rw.Unlock()
@@ -189,6 +197,7 @@ func (st *SortedTxMap) Del(hash []byte) {
 	delete(st.txMap, string(hash))
 }
 
+// Size returns the size of SortedTxMap.
 func (st *SortedTxMap) Size() int {
 	st.rw.Lock()
 	defer st.rw.Unlock()
@@ -196,6 +205,7 @@ func (st *SortedTxMap) Size() int {
 	return len(st.txMap)
 }
 
+// Iter returns the iterator of SortedTxMap.
 func (st *SortedTxMap) Iter() *Iterator {
 	iter := st.tree.Iterator()
 	iter.End()

@@ -167,18 +167,15 @@ func (pool *TxPImpl) AddLinkedNode(linkedNode *blockcache.BlockCacheNode, headNo
 
 // AddTx add the transaction
 func (pool *TxPImpl) AddTx(t *tx.Tx) TAddTx {
-
 	var r TAddTx
 
 	if r = pool.verifyTx(t); r != Success {
 		return r
 	}
-
 	if r = pool.addTx(t); r == Success {
 		pool.p2pService.Broadcast(t.Encode(), p2p.PublishTx, p2p.NormalMessage)
 		metricsReceivedTxCount.Add(1, map[string]string{"from": "rpc"})
 	}
-
 	return r
 }
 
@@ -190,6 +187,7 @@ func (pool *TxPImpl) DelTx(hash []byte) error {
 	return nil
 }
 
+// DelTxList deletes the tx list in txpool.
 func (pool *TxPImpl) DelTxList(delList []*tx.Tx) {
 	for _, t := range delList {
 		pool.pendingTx.Del(t.Hash())
@@ -352,7 +350,9 @@ func (pool *TxPImpl) initBlockTx() {
 }
 
 func (pool *TxPImpl) verifyTx(t *tx.Tx) TAddTx {
-
+	if pool.pendingTx.Size() > maxCacheTxs {
+		return CacheFullError
+	}
 	start := time.Now()
 	defer func(t time.Time) {
 		cost := time.Since(start).Nanoseconds() / int64(time.Microsecond)
@@ -489,7 +489,6 @@ func (pool *TxPImpl) addTx(tx *tx.Tx) TAddTx {
 	if pool.existTxInChain(h, pool.forkChain.NewHead.Block) {
 		return DupError
 	}
-
 	if pool.existTxInPending(h) {
 		return DupError
 	}

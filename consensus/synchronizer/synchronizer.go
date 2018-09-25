@@ -25,7 +25,7 @@ var (
 	retryTime                     = 5 * time.Second
 	syncBlockTimeout              = 5 * time.Second
 	syncHeightTime                = 3 * time.Second
-	heightTimeout           int64 = 5 * 3
+	heightTimeout           int64 = 11 * 3
 )
 
 type callbackfunc = func(hash string, peerID p2p.PeerID)
@@ -90,8 +90,9 @@ func (sy *SyncImpl) reqDownloadBlock(hash string, peerID p2p.PeerID) {
 	blkReq := &message.RequestBlock{
 		BlockHash: []byte(hash),
 	}
-	bytes, err := blkReq.Encode()
+	bytes, err := blkReq.Marshal()
 	if err != nil {
+		ilog.Errorf("marshal request block failed. err=%v", err)
 		return
 	}
 	sy.p2pService.SendToPeer(peerID, bytes, p2p.SyncBlockRequest, p2p.UrgentMessage)
@@ -149,13 +150,20 @@ func (sy *SyncImpl) syncHeightLoop() {
 			sy.p2pService.Broadcast(bytes, p2p.SyncHeight, p2p.UrgentMessage)
 		case req := <-sy.syncHeightChan:
 			var sh message.SyncHeight
-			err := proto.UnmarshalMerge(req.Data(), &sh)
+			err := proto.Unmarshal(req.Data(), &sh)
 			if err != nil {
 				ilog.Errorf("unmarshal syncheight failed. err=%v", err)
 				continue
 			}
+			if shIF, ok := sy.heightMap.Load(req.From()); ok {
+				if shOld, ok := shIF.(*message.SyncHeight); ok {
+					if shOld.Height == sh.Height {
+						continue
+					}
+				}
+			}
 			ilog.Infof("sync height from: %s, height: %v, time:%v", req.From().Pretty(), sh.Height, sh.Time)
-			sy.heightMap.Store(req.From(), sh)
+			sy.heightMap.Store(req.From(), &sh)
 		case <-sy.exitSignal:
 			return
 		}
@@ -173,9 +181,11 @@ func (sy *SyncImpl) CheckSync() bool {
 	heights = append(heights, sy.blockCache.Head().Number)
 	now := time.Now().Unix()
 	sy.heightMap.Range(func(k, v interface{}) bool {
-		sh, ok := v.(message.SyncHeight)
+		sh, ok := v.(*message.SyncHeight)
 		if !ok || sh.Time+heightTimeout < now {
-			sy.heightMap.Delete(k)
+			if sh.Time+heightTimeout*100 < now {
+				sy.heightMap.Delete(k)
+			}
 			return true
 		}
 		heights = append(heights, 0)
@@ -188,6 +198,7 @@ func (sy *SyncImpl) CheckSync() bool {
 		return true
 	})
 	netHeight := heights[len(heights)/2]
+	ilog.Infof("check sync, heights: %+v", heights)
 	if netHeight > height+syncNumber {
 		sy.basevariable.SetMode(global.ModeSync)
 		sy.dc.Reset()
@@ -230,7 +241,7 @@ func (sy *SyncImpl) CheckGenBlock(hash []byte) bool {
 }
 
 func (sy *SyncImpl) queryBlockHash(hr *message.BlockHashQuery) {
-	bytes, err := hr.Encode()
+	bytes, err := hr.Marshal()
 	if err != nil {
 		ilog.Errorf("marshal blockhashquery failed. err=%v", err)
 		return
@@ -262,11 +273,10 @@ func (sy *SyncImpl) syncBlocks(startNumber int64, endNumber int64) error {
 
 // CheckSyncProcess checks if the end of sync.
 func (sy *SyncImpl) CheckSyncProcess() {
+	ilog.Infof("check sync process: now %v, end %v", sy.blockCache.Head().Number, sy.syncEnd)
 	if sy.syncEnd <= sy.blockCache.Head().Number {
 		sy.basevariable.SetMode(global.ModeNormal)
 		sy.dc.Reset()
-	} else {
-		ilog.Infof("check sync process: now %v, end %v", sy.blockCache.Head().Number, sy.syncEnd)
 	}
 }
 
@@ -286,7 +296,7 @@ func (sy *SyncImpl) messageLoop() {
 		case req := <-sy.messageChan:
 			if req.Type() == p2p.SyncBlockHashRequest {
 				var rh message.BlockHashQuery
-				err := rh.Decode(req.Data())
+				err := rh.Unmarshal(req.Data())
 				if err != nil {
 					ilog.Errorf("unmarshal BlockHashQuery failed:%v", err)
 					break
@@ -294,7 +304,7 @@ func (sy *SyncImpl) messageLoop() {
 				go sy.handleHashQuery(&rh, req.From())
 			} else if req.Type() == p2p.SyncBlockHashResponse {
 				var rh message.BlockHashResponse
-				err := rh.Decode(req.Data())
+				err := rh.Unmarshal(req.Data())
 				if err != nil {
 					ilog.Errorf("unmarshal BlockHashResponse failed:%v", err)
 					break
@@ -302,7 +312,7 @@ func (sy *SyncImpl) messageLoop() {
 				go sy.handleHashResp(&rh, req.From())
 			} else if req.Type() == p2p.SyncBlockRequest {
 				var rh message.RequestBlock
-				err := rh.Decode(req.Data())
+				err := rh.Unmarshal(req.Data())
 				if err != nil {
 					break
 				}
@@ -393,7 +403,7 @@ func (sy *SyncImpl) handleHashQuery(rh *message.BlockHashQuery, peerID p2p.PeerI
 	if len(resp.BlockHashes) == 0 {
 		return
 	}
-	bytes, err := resp.Encode()
+	bytes, err := resp.Marshal()
 	if err != nil {
 		ilog.Errorf("marshal BlockHashResponse failed:struct=%v, err=%v", resp, err)
 		return
@@ -665,7 +675,8 @@ func (dc *DownloadControllerImpl) OnTimeout(hash string, peerID p2p.PeerID) {
 	if hStateIF, ok := dc.hashState.Load(hash); ok {
 		hState, ok := hStateIF.(string)
 		if !ok {
-			dc.hashState.Delete(hash)
+			ilog.Errorf("get hash state error: %s", hash)
+			// dc.hashState.Delete(hash)
 		} else if hState != Done {
 			dc.hashState.Store(hash, Wait)
 		}

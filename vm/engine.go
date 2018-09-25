@@ -148,10 +148,15 @@ func (e *engineImpl) exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
 			return nil, err
 		}
 
+		gasLimit := e.ho.Context().GValue("gas_limit").(int64)
+
 		txr.Status = status
+		if status.Code == 4 && status.Message == "out of gas" {
+			cost = contract.NewCost(0, 0, gasLimit)
+		}
+
 		txr.GasUsage += cost.ToGas()
 
-		gasLimit := e.ho.Context().GValue("gas_limit").(int64)
 		e.ho.Context().GSet("gas_limit", gasLimit-cost.ToGas())
 
 		e.ho.PayCost(cost, e.publisherID)
@@ -184,7 +189,7 @@ func (e *engineImpl) exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
 }
 
 func (e *engineImpl) Exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
-	ilog.Info("exec : ", tx0.Actions[0].Contract, tx0.Actions[0].ActionName)
+	ilog.Debug("exec : ", tx0.Actions[0].Contract, tx0.Actions[0].ActionName)
 	err := checkTx(tx0)
 	if err != nil {
 		ilog.Error(err)
