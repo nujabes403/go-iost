@@ -178,17 +178,27 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 		}
 	}
 	ilog.Infof("[pob] verify tx in txpool start, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
+	var timeOfFoundChain, timeOfFoundPending time.Duration
+	var numOfFoundChain, numOfFoundPending int
 
 	for _, tx := range blk.Txs {
+		t1 := time.Now()
 		exist, _ := txPool.ExistTxs(tx.Hash(), parent)
+		timespan := time.Now().Sub(t1)
+		ilog.Infof("[pob] ExistTx timespan:%v, exist:%v", timespan, exist)
 		if exist == txpool.FoundChain {
 			return errTxDup
 		} else if exist != txpool.FoundPending {
-			if err := tx.VerifySelf(); err != nil {
+			t1 = time.Now()
+			err = tx.VerifySelf()
+			timespan := time.Now().Sub(t1)
+			ilog.Infof("[pob] VerifySelf timespan:%v, err:%v", timespan, err)
+			if err != nil {
 				return errTxSignature
 			}
 		}
 		if blk.Head.Time*common.SlotLength-tx.Time/1e9 > txpool.Expiration {
+			ilog.Error("tx too old")
 			return errTxTooOld
 		}
 	}
