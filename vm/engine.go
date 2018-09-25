@@ -49,7 +49,7 @@ func SetUp(config *common.VMConfig) error {
 type engineImpl struct {
 	ho *host.Host
 
-	jsPath string
+	jsPath      string
 	publisherID string
 
 	logger        *ilog.Logger
@@ -185,7 +185,7 @@ func (e *engineImpl) exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
 }
 
 func (e *engineImpl) Exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
-	ilog.Info("exec : ", tx0.Actions[0].Contract, tx0.Actions[0].ActionName)
+	//ilog.Info("exec : ", tx0.Actions[0].Contract, tx0.Actions[0].ActionName)
 	err := checkTx(tx0)
 	if err != nil {
 		ilog.Error(err)
