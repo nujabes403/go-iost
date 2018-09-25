@@ -178,9 +178,6 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 		}
 	}
 	ilog.Infof("[pob] verify tx in txpool start, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
-	var timeOfFoundChain, timeOfFoundPending time.Duration
-	var numOfFoundChain, numOfFoundPending int
-
 	for _, tx := range blk.Txs {
 		t1 := time.Now()
 		exist, _ := txPool.ExistTxs(tx.Hash(), parent)
