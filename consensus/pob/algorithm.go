@@ -190,6 +190,7 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 			return errTxTooOld
 		}
 	}
+
 	return verifier.VerifyBlockWithVM(blk, db)
 }
 

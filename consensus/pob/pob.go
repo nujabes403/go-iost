@@ -274,7 +274,7 @@ func (p *PoB) verifyLoop() {
 				if p.baseVariable.Mode() == global.ModeInit {
 					continue
 				}
-				ilog.Infof("[pob] received new block, number:%d, hash=%v", blk.Head.Number, blk.HeadHash())
+				ilog.Infof("[pob] received new block, number:%d, hash=%v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 				timer, ok := p.blockReqMap.Load(string(blk.HeadHash()))
 				if ok {
 					t, ok := timer.(*time.Timer)
@@ -284,7 +284,9 @@ func (p *PoB) verifyLoop() {
 				} else {
 					p.blockReqMap.Store(string(blk.HeadHash()), nil)
 				}
+				ilog.Infof("[pob] handle recv new block start, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 				err := p.handleRecvBlock(blk)
+				ilog.Infof("[pob] handle recv new block end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 				p.broadcastBlockHash(blk) // can use go
 				p.blockReqMap.Delete(string(blk.HeadHash()))
 				if err != nil && err != errSingle {
@@ -294,7 +296,7 @@ func (p *PoB) verifyLoop() {
 				if err == errSingle {
 					go p.synchronizer.CheckSync()
 				}
-				ilog.Infof("[pob] verify block: %d", blk.Head.Number)
+				ilog.Infof("[pob] recv new block end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 			}
 			if vbm.p2pType == p2p.SyncBlockResponse {
 				ilog.Info("[pob] received sync block, block number: ", blk.Head.Number)
@@ -335,7 +337,7 @@ func (p *PoB) blockLoop() {
 				ilog.Error("fail to decode block")
 				continue
 			}
-			ilog.Info("received block, block number: ", blk.Head.Number)
+			ilog.Info("received block from others, block number: ", blk.Head.Number)
 			go p.synchronizer.OnRecvBlock(string(blk.HeadHash()), incomingMessage.From())
 			p.chVerifyBlock <- &verifyBlockMessage{blk: &blk, gen: false, p2pType: incomingMessage.Type()}
 		case <-p.exitSignal:
@@ -390,9 +392,12 @@ func (p *PoB) handleRecvBlock(blk *block.Block) error {
 	if err != nil {
 		return err
 	}
+	ilog.Infof("[pob] verify new block end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 	parent, err := p.blockCache.Find(blk.Head.ParentHash)
 	p.blockCache.Add(blk)
+	ilog.Infof("[pob] add into blockCache end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 	if err == nil && parent.Type == blockcache.Linked {
+		ilog.Infof("[pob] add ExistingBlock start, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 		return p.addExistingBlock(blk, parent.Block)
 	}
 	return errSingle
@@ -401,9 +406,12 @@ func (p *PoB) handleRecvBlock(blk *block.Block) error {
 func (p *PoB) addExistingBlock(blk *block.Block, parentBlock *block.Block) error {
 	node, _ := p.blockCache.Find(blk.HeadHash())
 	ok := p.verifyDB.Checkout(string(blk.HeadHash()))
+	ilog.Infof("[pob] verifyDB checkout end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 	if !ok {
 		p.verifyDB.Checkout(string(blk.Head.ParentHash))
+		ilog.Infof("[pob] verifyDB checkout parentHash end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 		err := verifyBlock(blk, parentBlock, p.blockCache.LinkedRoot().Block, p.txPool, p.verifyDB)
+		ilog.Infof("[pob] verify block end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 		if err != nil {
 			ilog.Errorf("verify block failed. err=%v", err)
 			p.blockCache.Del(node)
@@ -411,17 +419,22 @@ func (p *PoB) addExistingBlock(blk *block.Block, parentBlock *block.Block) error
 		}
 		p.verifyDB.Tag(string(blk.HeadHash()))
 	}
+	ilog.Infof("[pob] addLinkedNode start, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 	h := p.blockCache.Head()
 	if node.Number > h.Number {
 		p.txPool.AddLinkedNode(node, node)
 	} else {
 		p.txPool.AddLinkedNode(node, h)
 	}
+	ilog.Infof("[pob] addLinkedNode end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 	p.blockCache.Link(node)
+	ilog.Infof("[pob] blockCache link end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 	p.updateInfo(node)
+	ilog.Infof("[pob] updateInfo end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 	for child := range node.Children {
 		p.addExistingBlock(child.Block, node.Block)
 	}
+	ilog.Infof("[pob] addExistingBlock end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 	return nil
 }
 
