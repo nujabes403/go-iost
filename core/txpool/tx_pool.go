@@ -74,32 +74,24 @@ func (pool *TxPImpl) loop() {
 	if workerCnt == 0 {
 		workerCnt = 1
 	}
-
 	for i := 0; i < workerCnt; i++ {
 		go pool.verifyWorkers(pool.chP2PTx, pool.chTx)
 	}
-
 	clearTx := time.NewTicker(clearInterval)
 	defer clearTx.Stop()
-
 	for {
 		select {
 		case tr := <-pool.chTx:
 			metricsReceivedTxCount.Add(1, map[string]string{"from": "p2p"})
-
 			if ret := pool.addTx(tr); ret == Success {
 				pool.p2pService.Broadcast(tr.Encode(), p2p.PublishTx, p2p.NormalMessage)
 			}
-
 		case <-clearTx.C:
 			metricsTxPoolSize.Set(float64(pool.pendingTx.Size()), nil)
 			pool.mu.Lock()
-
 			pool.clearBlock()
 			pool.clearTimeOutTx()
-
 			pool.mu.Unlock()
-
 		case <-pool.quitCh:
 			return
 		}
