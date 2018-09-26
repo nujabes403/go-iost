@@ -74,7 +74,7 @@ var compileCmd = &cobra.Command{
 				fmt.Println(err.Error())
 				return
 			}
-			fmt.Println("Sucessfully reset contract path", setContractPath)
+			fmt.Println("Successfully reset contract path", setContractPath)
 			return
 		}
 
@@ -92,12 +92,12 @@ var compileCmd = &cobra.Command{
 				fmt.Println(err.Error())
 				return
 			}
-			fmt.Println("Sucessfully set contract path to: ", setContractPath)
+			fmt.Println("Successfully set contract path to: ", setContractPath)
 			return
 		}
 
 		if len(args) < 1 {
-			fmt.Println(`Error: source code file or abi file not given`)
+			fmt.Println(`Error: source code file not given`)
 			return
 		}
 		codePath := args[0]
@@ -107,14 +107,23 @@ var compileCmd = &cobra.Command{
 			return
 		}
 		code := string(fd)
-		abiPath := generateABI(codePath)
+
+		var abiPath string
+
+		if genABI {
+			abiPath = generateABI(codePath)
+			return
+		} else if len(args) < 2 {
+			fmt.Println(`Error: source code file or abi file not given`)
+			return
+		} else {
+			abiPath = args[1]
+			fmt.Println(args)
+
+		}
 
 		if abiPath == "" {
 			fmt.Println("Failed to Gen ABI!")
-			return
-		}
-
-		if genABI {
 			return
 		}
 
@@ -137,8 +146,8 @@ var compileCmd = &cobra.Command{
 		}
 		action := tx.NewAction("iost.system", "SetCode", `["`+contract.B64Encode()+`",]`)
 		pubkeys := make([][]byte, len(signers))
-		for i, pubkey := range signers {
-			pubkeys[i] = loadBytes(pubkey)
+		for i, accID := range signers {
+			pubkeys[i] = account.GetPubkeyByID(accID)
 		}
 
 		trx := tx.NewTx([]*tx.Action{&action}, pubkeys, gasLimit, gasPrice, time.Now().Add(time.Second*time.Duration(expiration)).UnixNano())
