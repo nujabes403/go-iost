@@ -190,11 +190,7 @@ func (e *engineImpl) exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
 }
 
 func (e *engineImpl) Exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
-<<<<<<< HEAD
-	//ilog.Info("exec : ", tx0.Actions[0].Contract, tx0.Actions[0].ActionName)
-=======
 	ilog.Debug("exec : ", tx0.Actions[0].Contract, tx0.Actions[0].ActionName)
->>>>>>> develop
 	err := checkTx(tx0)
 	if err != nil {
 		ilog.Error(err)
