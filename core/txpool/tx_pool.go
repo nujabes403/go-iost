@@ -8,6 +8,8 @@ import (
 
 	"runtime"
 
+	"fmt"
+
 	"github.com/iost-official/Go-IOS-Protocol/common"
 	"github.com/iost-official/Go-IOS-Protocol/core/block"
 	"github.com/iost-official/Go-IOS-Protocol/core/blockcache"
@@ -27,7 +29,6 @@ type TxPImpl struct {
 	pendingTx        *SortedTxMap
 	mu               sync.RWMutex
 	chP2PTx          chan p2p.IncomingMessage
-	chTx             chan *tx.Tx
 	quitGenerateMode chan struct{}
 	quitCh           chan struct{}
 }
@@ -42,7 +43,6 @@ func NewTxPoolImpl(global global.BaseVariable, blockCache blockcache.BlockCache,
 		blockList:        new(sync.Map),
 		pendingTx:        NewSortedTxMap(),
 		chP2PTx:          p2pService.Register("txpool message", p2p.PublishTx),
-		chTx:             make(chan *tx.Tx, 102400),
 		quitGenerateMode: make(chan struct{}),
 		quitCh:           make(chan struct{}),
 	}
@@ -75,17 +75,12 @@ func (pool *TxPImpl) loop() {
 		workerCnt = 1
 	}
 	for i := 0; i < workerCnt; i++ {
-		go pool.verifyWorkers(pool.chP2PTx, pool.chTx)
+		go pool.verifyWorkers()
 	}
 	clearTx := time.NewTicker(clearInterval)
 	defer clearTx.Stop()
 	for {
 		select {
-		case tr := <-pool.chTx:
-			metricsReceivedTxCount.Add(1, map[string]string{"from": "p2p"})
-			if ret := pool.addTx(tr); ret == Success {
-				pool.p2pService.Broadcast(tr.Encode(), p2p.PublishTx, p2p.NormalMessage)
-			}
 		case <-clearTx.C:
 			metricsTxPoolSize.Set(float64(pool.pendingTx.Size()), nil)
 			pool.mu.Lock()
@@ -110,8 +105,9 @@ func (pool *TxPImpl) Release() {
 	close(pool.quitGenerateMode)
 }
 
-func (pool *TxPImpl) verifyWorkers(p2pCh chan p2p.IncomingMessage, tCn chan *tx.Tx) {
-	for v := range p2pCh {
+func (pool *TxPImpl) verifyWorkers() {
+	for v := range pool.chP2PTx {
+		metricsReceivedTxCount.Add(1, map[string]string{"from": "p2p"})
 		select {
 		case <-pool.quitGenerateMode:
 		}
@@ -120,27 +116,26 @@ func (pool *TxPImpl) verifyWorkers(p2pCh chan p2p.IncomingMessage, tCn chan *tx.
 		if err != nil {
 			continue
 		}
-
-		if r := pool.verifyTx(&t); r == Success {
-			tCn <- &t
+		ret := pool.verifyTx(&t)
+		if ret != Success {
+			continue
 		}
+		ret = pool.addTx(&t)
+		if ret != Success {
+			continue
+		}
+		pool.p2pService.Broadcast(v.Data(), p2p.PublishTx, p2p.NormalMessage)
 	}
 }
 
 // AddLinkedNode add the block
 func (pool *TxPImpl) AddLinkedNode(linkedNode *blockcache.BlockCacheNode, headNode *blockcache.BlockCacheNode) error {
-	//ilog.Infof("block: %+v", linkedNode.Block)
-	//ilog.Infof("headNode block:%+v", headNode.Block)
-	if linkedNode == nil || headNode == nil {
-		return errors.New("parameter is nil")
+	err := pool.addBlock(linkedNode.Block)
+	if err != nil {
+		return fmt.Errorf("failed to add block: %v", err)
 	}
-
-	if pool.addBlock(linkedNode.Block) != nil {
-		return errors.New("failed to add block")
-	}
-
-	tFort := pool.updateForkChain(headNode)
-	switch tFort {
+	typeOfFork := pool.updateForkChain(headNode)
+	switch typeOfFork {
 	case forkBCN:
 		pool.mu.Lock()
 		defer pool.mu.Unlock()
@@ -173,9 +168,7 @@ func (pool *TxPImpl) AddTx(t *tx.Tx) TAddTx {
 
 // DelTx del the transaction
 func (pool *TxPImpl) DelTx(hash []byte) error {
-
 	pool.pendingTx.Del(hash)
-
 	return nil
 }
 
@@ -455,18 +448,13 @@ func (pool *TxPImpl) existTxInBlock(txHash []byte, blockHash []byte) bool {
 }
 
 func (pool *TxPImpl) clearBlock() {
-	if pool.global.Mode() == global.ModeInit {
-		return
-	}
-	ft := pool.slotToNSec(pool.blockCache.LinkedRoot().Block.Head.Time) - filterTime
-
+	filterLimit := pool.slotToNSec(pool.blockCache.LinkedRoot().Block.Head.Time) - filterTime
 	pool.blockList.Range(func(key, value interface{}) bool {
-		if value.(*blockTx).time() < ft {
-			pool.blockList.Delete(key.(string))
+		if value.(*blockTx).time() < filterLimit {
+			pool.blockList.Delete(key)
 		}
 		return true
 	})
-
 }
 
 func (pool *TxPImpl) addTx(tx *tx.Tx) TAddTx {
@@ -519,16 +507,14 @@ func (pool *TxPImpl) TxTimeOut(tx *tx.Tx) bool {
 }
 
 func (pool *TxPImpl) clearTimeOutTx() {
-
 	iter := pool.pendingTx.Iter()
-	tx, ok := iter.Next()
+	t, ok := iter.Next()
 	for ok {
-		if pool.TxTimeOut(tx) {
-			pool.DelTx(tx.Hash())
+		if pool.TxTimeOut(t) {
+			pool.pendingTx.Del(t.Hash())
 		}
-		tx, ok = iter.Next()
+		t, ok = iter.Next()
 	}
-
 }
 
 func (pool *TxPImpl) delBlockTxInPending(hash []byte) error {
