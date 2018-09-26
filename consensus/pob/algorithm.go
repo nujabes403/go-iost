@@ -179,18 +179,14 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 		}
 	}
 	ilog.Infof("[pob] verify tx in txpool start, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
+	var notFoundPending int64
 	for _, tx := range blk.Txs {
-		t1 := time.Now()
 		exist, _ := txPool.ExistTxs(tx.Hash(), parent)
-		timespan := time.Now().Sub(t1)
-		ilog.Infof("[pob] ExistTx timespan:%v, exist:%v", timespan, exist)
 		if exist == txpool.FoundChain {
 			return errTxDup
 		} else if exist != txpool.FoundPending {
-			t1 = time.Now()
+			notFoundPending += 1
 			err = tx.VerifySelf()
-			timespan := time.Now().Sub(t1)
-			ilog.Infof("[pob] VerifySelf timespan:%v, err:%v", timespan, err)
 			if err != nil {
 				return errTxSignature
 			}
@@ -200,6 +196,7 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 			return errTxTooOld
 		}
 	}
+	ilog.Infof("[pob] tx not found in pending: %v", notFoundPending)
 	ilog.Infof("[pob] verify tx in txpool end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 
 	return verifier.VerifyBlockWithVM(blk, db)
