@@ -196,7 +196,7 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 			return errTxTooOld
 		}
 	}
-	ilog.Infof("[pob] tx not found in pending: %v", notFoundPending)
+	ilog.Infof("[pob] all tx: %v, tx not found in pending: %v", len(blk.Txs), notFoundPending)
 	ilog.Infof("[pob] verify tx in txpool end, number: %d, hash = %v", blk.Head.Number, common.Base58Encode(blk.HeadHash()))
 
 	return verifier.VerifyBlockWithVM(blk, db)
