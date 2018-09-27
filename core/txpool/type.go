@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/emirpasic/gods/trees/redblacktree"
+	"github.com/iost-official/Go-IOS-Protocol/common"
 	"github.com/iost-official/Go-IOS-Protocol/core/block"
 	"github.com/iost-official/Go-IOS-Protocol/core/blockcache"
 	"github.com/iost-official/Go-IOS-Protocol/core/tx"
@@ -18,19 +19,15 @@ var (
 	filterTime  = int64(90 * time.Second)
 	maxCacheTxs = 30000
 
-	metricsReceivedTxCount      = metrics.NewCounter("iost_tx_received_count", []string{"from"})
-	metricsGetPendingTxTime     = metrics.NewGauge("iost_get_pending_tx_time", nil)
-	metricsGetPendingTxLockTime = metrics.NewGauge("iost_get_pending_tx_lock_time", nil)
-	//metricsGetPendingTxSortTime   = metrics.NewGauge("iost_get_pending_tx_sort_time", nil)
-	metricsGetPendingTxAppendTime = metrics.NewGauge("iost_get_pending_tx_append_time", nil)
-	metricsExistTxTime            = metrics.NewSummary("iost_exist_tx_time", nil)
-	metricsExistTxCount           = metrics.NewCounter("iost_exist_tx_count", nil)
-	metricsVerifyTxTime           = metrics.NewSummary("iost_verify_tx_time", nil)
-	metricsVerifyTxCount          = metrics.NewCounter("iost_verify_tx_count", nil)
-	metricsAddTxTime              = metrics.NewSummary("iost_add_tx_time", nil)
-	metricsAddTxCount             = metrics.NewCounter("iost_add_tx_count", nil)
-	metricsTxPoolSize             = metrics.NewGauge("iost_txpool_size", nil)
-	metricsTxErrType              = metrics.NewCounter("iost_txerr_type", []string{"type"})
+	metricsReceivedTxCount = metrics.NewCounter("iost_tx_received_count", []string{"from"})
+	metricsExistTxTime     = metrics.NewSummary("iost_exist_tx_time", nil)
+	metricsExistTxCount    = metrics.NewCounter("iost_exist_tx_count", nil)
+	metricsVerifyTxTime    = metrics.NewSummary("iost_verify_tx_time", nil)
+	metricsVerifyTxCount   = metrics.NewCounter("iost_verify_tx_count", nil)
+	metricsAddTxTime       = metrics.NewSummary("iost_add_tx_time", nil)
+	metricsAddTxCount      = metrics.NewCounter("iost_add_tx_count", nil)
+	metricsTxPoolSize      = metrics.NewGauge("iost_txpool_size", nil)
+	metricsTxErrType       = metrics.NewCounter("iost_txerr_type", []string{"type"})
 )
 
 // FRet find the return value of the tx
@@ -107,40 +104,34 @@ func (s *TxsList) Push(x *tx.Tx) {
 }
 
 type blockTx struct {
+	chainMap   *sync.Map
 	txMap      *sync.Map
 	ParentHash []byte
-	cTime      int64
+	time       int64
 }
 
-func newBlockTx() *blockTx {
+func newBlockTx(blk *block.Block, parentBlockTx interface{}) *blockTx {
 	b := &blockTx{
+		chainMap:   new(sync.Map),
 		txMap:      new(sync.Map),
-		ParentHash: make([]byte, 32),
+		ParentHash: blk.Head.ParentHash,
+		time:       common.SlotLength * blk.Head.Time * int64(time.Second),
 	}
-
+	if parentBlockTx != nil {
+		parentBlockTx.(*blockTx).txMap.Range(func(key, value interface{}) bool {
+			b.chainMap.Store(key, value)
+			return true
+		})
+	}
+	for _, v := range blk.Txs {
+		b.chainMap.Store(string(v.Hash()), v)
+		b.txMap.Store(string(v.Hash()), v)
+	}
 	return b
 }
 
-func (b *blockTx) time() int64 {
-	return b.cTime
-}
-
-func (b *blockTx) setTime(t int64) {
-	b.cTime = t
-}
-
-func (b *blockTx) addBlock(ib *block.Block) {
-
-	for _, v := range ib.Txs {
-		b.txMap.Store(string(v.Hash()), v)
-	}
-	b.ParentHash = ib.Head.ParentHash
-}
-
 func (b *blockTx) existTx(hash []byte) bool {
-
 	_, r := b.txMap.Load(string(hash))
-
 	return r
 }
 

@@ -15,7 +15,6 @@ import (
 	"github.com/iost-official/Go-IOS-Protocol/core/blockcache"
 	"github.com/iost-official/Go-IOS-Protocol/core/global"
 	"github.com/iost-official/Go-IOS-Protocol/core/tx"
-	"github.com/iost-official/Go-IOS-Protocol/ilog"
 	"github.com/iost-official/Go-IOS-Protocol/p2p"
 )
 
@@ -107,7 +106,6 @@ func (pool *TxPImpl) Release() {
 
 func (pool *TxPImpl) verifyWorkers() {
 	for v := range pool.chP2PTx {
-		metricsReceivedTxCount.Add(1, map[string]string{"from": "p2p"})
 		select {
 		case <-pool.quitGenerateMode:
 		}
@@ -124,17 +122,18 @@ func (pool *TxPImpl) verifyWorkers() {
 		if ret != Success {
 			continue
 		}
+		metricsReceivedTxCount.Add(1, map[string]string{"from": "p2p"})
 		pool.p2pService.Broadcast(v.Data(), p2p.PublishTx, p2p.NormalMessage)
 	}
 }
 
-// AddLinkedNode add the block
-func (pool *TxPImpl) AddLinkedNode(linkedNode *blockcache.BlockCacheNode, headNode *blockcache.BlockCacheNode) error {
+// AddLinkedNode add the findBlock
+func (pool *TxPImpl) AddLinkedNode(linkedNode *blockcache.BlockCacheNode, newHead *blockcache.BlockCacheNode) error {
 	err := pool.addBlock(linkedNode.Block)
 	if err != nil {
-		return fmt.Errorf("failed to add block: %v", err)
+		return fmt.Errorf("failed to add findBlock: %v", err)
 	}
-	typeOfFork := pool.updateForkChain(headNode)
+	typeOfFork := pool.updateForkChain(newHead)
 	switch typeOfFork {
 	case forkBCN:
 		pool.mu.Lock()
@@ -143,27 +142,27 @@ func (pool *TxPImpl) AddLinkedNode(linkedNode *blockcache.BlockCacheNode, headNo
 	case noForkBCN:
 		pool.mu.Lock()
 		defer pool.mu.Unlock()
-		pool.doChainChangeByTimeout()
+		pool.doChainChangeByTimeout() //?
 	case sameHead:
 	default:
 		return errors.New("failed to tFort")
 	}
-
 	return nil
 }
 
 // AddTx add the transaction
 func (pool *TxPImpl) AddTx(t *tx.Tx) TAddTx {
-	var r TAddTx
-
-	if r = pool.verifyTx(t); r != Success {
-		return r
+	ret := pool.verifyTx(t)
+	if ret != Success {
+		return ret
 	}
-	if r = pool.addTx(t); r == Success {
-		pool.p2pService.Broadcast(t.Encode(), p2p.PublishTx, p2p.NormalMessage)
-		metricsReceivedTxCount.Add(1, map[string]string{"from": "rpc"})
+	ret = pool.addTx(t)
+	if ret != Success {
+		return ret
 	}
-	return r
+	pool.p2pService.Broadcast(t.Encode(), p2p.PublishTx, p2p.NormalMessage)
+	metricsReceivedTxCount.Add(1, map[string]string{"from": "rpc"})
+	return ret
 }
 
 // DelTx del the transaction
@@ -185,153 +184,38 @@ func (pool *TxPImpl) TxIterator() (*Iterator, *blockcache.BlockCacheNode) {
 	return pool.pendingTx.Iter(), pool.forkChain.NewHead
 }
 
-// PendingTxs get the pending transactions
-func (pool *TxPImpl) PendingTxs(maxCnt int) (TxsList, *blockcache.BlockCacheNode, error) {
-	start := time.Now()
-	defer func(t time.Time) {
-		cost := time.Since(t).Nanoseconds() / int64(time.Microsecond)
-		metricsGetPendingTxTime.Set(float64(cost), nil)
-	}(start)
-
-	pool.mu.Lock()
-	cost := time.Since(start).Nanoseconds() / int64(time.Microsecond)
-	metricsGetPendingTxLockTime.Set(float64(cost), nil)
-	defer pool.mu.Unlock()
-
-	start = time.Now()
-	var pendingList TxsList
-	iter := pool.pendingTx.Iter()
-	var i int
-	tx, ok := iter.Next()
-	for ok && i < maxCnt {
-		if !pool.TxTimeOut(tx) {
-			pendingList = append(pendingList, tx)
-		}
-		tx, ok = iter.Next()
-	}
-	cost = time.Since(start).Nanoseconds() / int64(time.Microsecond)
-	metricsGetPendingTxAppendTime.Set(float64(cost), nil)
-
-	metricsTxPoolSize.Set(float64(pool.pendingTx.Size()), nil)
-
-	return pendingList, pool.forkChain.NewHead, nil
-}
-
 // ExistTxs determine if the transaction exists
-func (pool *TxPImpl) ExistTxs(hash []byte, chainBlock *block.Block) (FRet, error) {
+func (pool *TxPImpl) ExistTxs(hash []byte, chainBlock *block.Block) FRet {
 	start := time.Now()
-	defer func(t time.Time) {
+	defer func() {
 		cost := time.Since(start).Nanoseconds() / int64(time.Microsecond)
 		metricsExistTxTime.Observe(float64(cost), nil)
 		metricsExistTxCount.Add(1, nil)
-	}(start)
-
+	}()
 	var r FRet
-
 	switch {
 	case pool.existTxInPending(hash):
 		r = FoundPending
-	case pool.existTxInChain(hash, chainBlock):
+	case pool.existTxInChain1(hash, chainBlock):
 		r = FoundChain
 	default:
 		r = NotFound
 	}
-
-	return r, nil
-}
-
-// CheckTxs check txs
-func (pool *TxPImpl) CheckTxs(txs []*tx.Tx, chainBlock *block.Block) (*tx.Tx, error) {
-
-	rm, err := pool.createTxMapToChain(chainBlock)
-	if err != nil {
-		return nil, err
-	}
-
-	dtm := new(sync.Map)
-	for _, v := range txs {
-		trh := string(v.Hash())
-		if _, ok := rm.Load(trh); ok {
-			return v, errors.New("duplicate tx in chain")
-		}
-
-		if _, ok := dtm.Load(trh); ok {
-			return v, errors.New("duplicate tx in txs")
-		}
-		dtm.Store(trh, nil)
-
-		if ok := pool.existTxInPending([]byte(trh)); !ok {
-			if pool.verifyTx(v) != Success {
-				return v, errors.New("failed to verify")
-			}
-		}
-	}
-
-	return nil, nil
-}
-
-func (pool *TxPImpl) createTxMapToChain(chainBlock *block.Block) (*sync.Map, error) {
-
-	if chainBlock == nil {
-		return nil, errors.New("chainBlock is nil")
-	}
-
-	rm := new(sync.Map)
-	h := chainBlock.HeadHash()
-
-	t := pool.slotToNSec(chainBlock.Head.Time)
-	var ok bool
-
-	for {
-		ret := pool.createTxMapToBlock(rm, h)
-		if !ret {
-			return nil, errors.New("failed to create tx map")
-		}
-
-		h, ok = pool.parentHash(h)
-		if !ok {
-			return nil, errors.New("failed to get parent chainBlock")
-		}
-
-		if b, ok := pool.block(h); ok {
-			if (t - b.time()) > filterTime {
-				return rm, nil
-			}
-		}
-
-	}
-
-}
-
-func (pool *TxPImpl) createTxMapToBlock(tm *sync.Map, blockHash []byte) bool {
-
-	b, ok := pool.blockList.Load(string(blockHash))
-	if !ok {
-		return false
-	}
-
-	b.(*blockTx).txMap.Range(func(key, value interface{}) bool {
-		tm.Store(key.(string), nil)
-		return true
-	})
-
-	return true
+	return r
 }
 
 func (pool *TxPImpl) initBlockTx() {
-	chain := pool.global.BlockChain()
-	timeNow := time.Now().UnixNano()
-	for i := chain.Length() - 1; i > 0; i-- {
-		blk, err := chain.GetBlockByNumber(i)
+	filterLimit := time.Now().UnixNano() - filterTime
+	for i := pool.global.BlockChain().Length() - 1; i > 0; i-- {
+		blk, err := pool.global.BlockChain().GetBlockByNumber(i)
 		if err != nil {
-			return
+			break
 		}
-		t := pool.slotToNSec(blk.Head.Time)
-		if timeNow-t <= filterTime {
-			pool.addBlock(blk)
+		if pool.slotToNSec(blk.Head.Time) < filterLimit {
+			break
 		}
+		pool.addBlock(blk)
 	}
-
 }
 
 func (pool *TxPImpl) verifyTx(t *tx.Tx) TAddTx {
@@ -344,19 +228,15 @@ func (pool *TxPImpl) verifyTx(t *tx.Tx) TAddTx {
 		metricsVerifyTxTime.Observe(float64(cost), nil)
 		metricsVerifyTxCount.Add(1, nil)
 	}(start)
-
 	if t.GasPrice <= 0 {
 		return GasPriceError
 	}
-
 	if pool.TxTimeOut(t) {
 		return TimeError
 	}
-
 	if err := t.VerifySelf(); err != nil {
 		return VerifyError
 	}
-
 	return Success
 }
 
@@ -364,93 +244,69 @@ func (pool *TxPImpl) slotToNSec(t int64) int64 {
 	return common.SlotLength * t * int64(time.Second)
 }
 
-func (pool *TxPImpl) addBlock(linkedBlock *block.Block) error {
-
-	if linkedBlock == nil {
+func (pool *TxPImpl) addBlock(blk *block.Block) error {
+	if blk == nil {
 		return errors.New("failed to linkedBlock")
 	}
-
-	h := linkedBlock.HeadHash()
-
-	if _, ok := pool.blockList.Load(string(h)); ok {
+	if _, ok := pool.blockList.Load(string(blk.HeadHash())); ok {
 		return nil
 	}
-
-	b := newBlockTx()
-
-	b.setTime(pool.slotToNSec(linkedBlock.Head.Time))
-	b.addBlock(linkedBlock)
-
-	pool.blockList.Store(string(h), b)
-
+	parentBlockTx, _ := pool.blockList.Load(string(blk.Head.ParentHash))
+	pool.blockList.Store(string(blk.HeadHash()), newBlockTx(blk, parentBlockTx))
 	return nil
 }
 
 func (pool *TxPImpl) parentHash(hash []byte) ([]byte, bool) {
-
-	v, ok := pool.block(hash)
+	v, ok := pool.findBlock(hash)
 	if !ok {
 		return nil, false
 	}
-
 	return v.ParentHash, true
 }
 
-func (pool *TxPImpl) block(hash []byte) (*blockTx, bool) {
-
+func (pool *TxPImpl) findBlock(hash []byte) (*blockTx, bool) {
 	if v, ok := pool.blockList.Load(string(hash)); ok {
 		return v.(*blockTx), true
 	}
-
 	return nil, false
 }
 
-func (pool *TxPImpl) existTxInChain(txHash []byte, block *block.Block) bool {
-
+func (pool *TxPImpl) existTxInChain1(txHash []byte, block *block.Block) bool {
 	if block == nil {
 		return false
 	}
-
 	h := block.HeadHash()
-
-	t := pool.slotToNSec(block.Head.Time)
+	filterLimit := pool.slotToNSec(block.Head.Time) - filterTime
 	var ok bool
-
 	for {
 		ret := pool.existTxInBlock(txHash, h)
 		if ret {
 			return true
 		}
-
 		h, ok = pool.parentHash(h)
 		if !ok {
 			return false
 		}
-
-		if b, ok := pool.block(h); ok {
-			if (t - b.time()) > filterTime {
+		if b, ok := pool.findBlock(h); ok {
+			if b.time < filterLimit {
 				return false
 			}
 		}
-
 	}
-
 }
 
 func (pool *TxPImpl) existTxInBlock(txHash []byte, blockHash []byte) bool {
-
 	b, ok := pool.blockList.Load(string(blockHash))
 	if !ok {
 		return false
 	}
-
 	return b.(*blockTx).existTx(txHash)
 }
 
 func (pool *TxPImpl) clearBlock() {
 	filterLimit := pool.slotToNSec(pool.blockCache.LinkedRoot().Block.Head.Time) - filterTime
 	pool.blockList.Range(func(key, value interface{}) bool {
-		if value.(*blockTx).time() < filterLimit {
+		if value.(*blockTx).time < filterLimit {
 			pool.blockList.Delete(key)
 		}
 		return true
@@ -464,9 +320,8 @@ func (pool *TxPImpl) addTx(tx *tx.Tx) TAddTx {
 		metricsAddTxTime.Observe(float64(cost), nil)
 		metricsAddTxCount.Add(1, nil)
 	}(start)
-
 	h := tx.Hash()
-	if pool.existTxInChain(h, pool.forkChain.NewHead.Block) {
+	if pool.existTxInChain1(h, pool.forkChain.NewHead.Block) {
 		return DupError
 	}
 	if pool.existTxInPending(h) {
@@ -477,29 +332,21 @@ func (pool *TxPImpl) addTx(tx *tx.Tx) TAddTx {
 }
 
 func (pool *TxPImpl) existTxInPending(hash []byte) bool {
-
-	tx := pool.pendingTx.Get(hash)
-
-	return tx != nil
+	return pool.pendingTx.Get(hash) != nil
 }
 
 // TxTimeOut time to verify the tx
 func (pool *TxPImpl) TxTimeOut(tx *tx.Tx) bool {
-	nTime := time.Now().UnixNano()
-	txTime := tx.Time
-	exTime := tx.Expiration
-
-	if txTime > nTime {
-		metricsTxErrType.Add(1, map[string]string{"type": "txTime > nTime"})
+	currentTime := time.Now().UnixNano()
+	if tx.Time > currentTime {
+		metricsTxErrType.Add(1, map[string]string{"type": "txTime > currentTime"})
 		return true
 	}
-
-	if exTime <= nTime {
-		metricsTxErrType.Add(1, map[string]string{"type": "exTime <= nTime"})
+	if tx.Expiration <= currentTime {
+		metricsTxErrType.Add(1, map[string]string{"type": "exTime <= currentTime"})
 		return true
 	}
-
-	if nTime-txTime > Expiration {
+	if currentTime-tx.Time > Expiration {
 		metricsTxErrType.Add(1, map[string]string{"type": "nTime-txTime > expiration"})
 		return true
 	}
@@ -517,45 +364,11 @@ func (pool *TxPImpl) clearTimeOutTx() {
 	}
 }
 
-func (pool *TxPImpl) delBlockTxInPending(hash []byte) error {
-
-	b, ok := pool.block(hash)
-	if !ok {
-		return nil
-	}
-
-	b.txMap.Range(func(key, value interface{}) bool {
-		pool.pendingTx.Del([]byte(key.(string)))
-		return true
-	})
-
-	return nil
-}
-
-func (pool *TxPImpl) clearTxPending() {
-	pool.pendingTx = NewSortedTxMap()
-}
-
-func (pool *TxPImpl) updatePending(blockHash []byte) error {
-
-	b, ok := pool.block(blockHash)
-	if !ok {
-		return errors.New("updatePending is error")
-	}
-
-	b.txMap.Range(func(key, value interface{}) bool {
-		pool.DelTx(key.([]byte))
-		return true
-	})
-
-	return nil
-}
-
-func (pool *TxPImpl) updateForkChain(headNode *blockcache.BlockCacheNode) tFork {
-	if pool.forkChain.NewHead == headNode {
+func (pool *TxPImpl) updateForkChain(newHead *blockcache.BlockCacheNode) tFork {
+	if pool.forkChain.NewHead == newHead {
 		return sameHead
 	}
-	pool.forkChain.OldHead, pool.forkChain.NewHead = pool.forkChain.NewHead, headNode
+	pool.forkChain.OldHead, pool.forkChain.NewHead = pool.forkChain.NewHead, newHead
 	bcn, ok := pool.findForkBCN(pool.forkChain.NewHead, pool.forkChain.OldHead)
 	if ok {
 		pool.forkChain.ForkBCN = bcn
@@ -563,7 +376,6 @@ func (pool *TxPImpl) updateForkChain(headNode *blockcache.BlockCacheNode) tFork 
 	}
 	pool.forkChain.ForkBCN = nil
 	return noForkBCN
-
 }
 
 func (pool *TxPImpl) findForkBCN(newHead *blockcache.BlockCacheNode, oldHead *blockcache.BlockCacheNode) (*blockcache.BlockCacheNode, bool) {
@@ -577,13 +389,6 @@ func (pool *TxPImpl) findForkBCN(newHead *blockcache.BlockCacheNode, oldHead *bl
 		if oldHead == newHead {
 			return oldHead, true
 		}
-
-		_, ok := pool.block(newHead.Block.HeadHash())
-		if !ok {
-			if err := pool.addBlock(newHead.Block); err != nil {
-				ilog.Errorf("failed to add block, err = %v", err)
-			}
-		}
 		newHead = newHead.Parent
 		if newHead == nil {
 			return nil, false
@@ -596,9 +401,9 @@ func (pool *TxPImpl) doChainChangeByForkBCN() {
 	oldHead := pool.forkChain.OldHead
 	forkBCN := pool.forkChain.ForkBCN
 	//Reply to txs
-	ft := time.Now().UnixNano() - filterTime
+	filterLimit := time.Now().UnixNano() - filterTime
 	for {
-		if oldHead == nil || oldHead == forkBCN || pool.slotToNSec(oldHead.Block.Head.Time) < ft {
+		if oldHead == nil || oldHead == forkBCN || pool.slotToNSec(oldHead.Block.Head.Time) < filterLimit {
 			break
 		}
 		for _, t := range oldHead.Block.Txs {
@@ -609,7 +414,7 @@ func (pool *TxPImpl) doChainChangeByForkBCN() {
 
 	//Check duplicate txs
 	for {
-		if newHead == nil || newHead == forkBCN || pool.slotToNSec(newHead.Block.Head.Time) < ft {
+		if newHead == nil || newHead == forkBCN || pool.slotToNSec(newHead.Block.Head.Time) < filterLimit {
 			break
 		}
 		for _, t := range newHead.Block.Txs {
@@ -622,36 +427,34 @@ func (pool *TxPImpl) doChainChangeByForkBCN() {
 func (pool *TxPImpl) doChainChangeByTimeout() {
 	newHead := pool.forkChain.NewHead
 	oldHead := pool.forkChain.OldHead
-	ft := time.Now().UnixNano() - filterTime
-	ob, ok := pool.block(oldHead.Block.HeadHash())
+	filterLimit := time.Now().UnixNano() - filterTime
+	ob, ok := pool.findBlock(oldHead.Block.HeadHash())
 	if ok {
 		for {
-			if ob.time() < ft {
+			if ob.time < filterLimit {
 				break
 			}
 			ob.txMap.Range(func(k, v interface{}) bool {
-				t := v.(*tx.Tx)
-				pool.pendingTx.Add(t)
+				pool.pendingTx.Add(v.(*tx.Tx))
 				return true
 			})
-			ob, ok = pool.block(ob.ParentHash)
+			ob, ok = pool.findBlock(ob.ParentHash)
 			if !ok {
 				break
 			}
 		}
 	}
-	nb, ok := pool.block(newHead.Block.HeadHash())
+	nb, ok := pool.findBlock(newHead.Block.HeadHash())
 	if ok {
 		for {
-			if nb.time() < ft {
+			if nb.time < filterLimit {
 				break
 			}
 			nb.txMap.Range(func(k, v interface{}) bool {
-				t := v.(*tx.Tx)
-				pool.DelTx(t.Hash())
+				pool.DelTx(v.(*tx.Tx).Hash())
 				return true
 			})
-			nb, ok = pool.block(nb.ParentHash)
+			nb, ok = pool.findBlock(nb.ParentHash)
 			if !ok {
 				break
 			}
@@ -667,7 +470,6 @@ func (pool *TxPImpl) testBlockListNum() int64 {
 	var r int64
 	pool.blockList.Range(func(key, value interface{}) bool {
 		r++
-		//fmt.Println("blockList hash:", []byte(key.(string)))
 		return true
 	})
 	return r
