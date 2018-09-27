@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"sync"
 )
 
 //nolint
@@ -20,8 +21,10 @@ func TestEventCollector_Post(t *testing.T) {
 	count2 := 0
 	count3 := 0
 
+	var mux sync.Mutex
 	go func(ch <-chan *Event) {
 		t.Log("run sub1")
+		loop:
 		for {
 			select {
 			case e := <-ch:
@@ -31,13 +34,18 @@ func TestEventCollector_Post(t *testing.T) {
 				if e.Data != "test1" {
 					t.Fatalf("sub1 expect event data test1, got %s", e.Data)
 				}
+				mux.Lock()
 				count1++
+				mux.Unlock()
+			case <- time.After(1 * time.Second):
+				break loop
 			}
 		}
 	}(sub1.ReadChan())
 
 	go func(ch <-chan *Event) {
 		t.Log("run sub2")
+		loop:
 		for {
 			select {
 			case e := <-ch:
@@ -47,20 +55,29 @@ func TestEventCollector_Post(t *testing.T) {
 				if e.Data != "test2" {
 					t.Fatalf("sub2 expect event data test2, got %s", e.Data)
 				}
+				mux.Lock()
 				count2++
+				mux.Unlock()
+			case <- time.After(1 * time.Second):
+				break loop
 			}
 		}
 	}(sub2.ReadChan())
 
 	go func(ch <-chan *Event) {
 		t.Log("run sub3")
+		loop:
 		for {
 			select {
 			case e := <-ch:
 				if e.Topic != Event_TransactionResult && e.Topic != Event_ContractEvent {
 					t.Fatalf("sub3 expect event topic Event_TransactionResult or Event_ContractEvent, got %s", e.Topic.String())
 				}
+				mux.Lock()
 				count3++
+				mux.Unlock()
+			case <- time.After(1 * time.Second):
+				break loop
 			}
 		}
 	}(sub3.ReadChan())
@@ -71,9 +88,11 @@ func TestEventCollector_Post(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 
+	mux.Lock()
 	if count1 != 1 || count2 != 2 || count3 != 3 {
 		t.Fatalf("expect count1 = 1, count2 = 2, count3 = 3, got %d %d %d", count1, count2, count3)
 	}
+	mux.Unlock()
 
 	ec.Unsubscribe(sub1)
 	ec.Post(NewEvent(Event_TransactionResult, "test1"))
@@ -82,9 +101,11 @@ func TestEventCollector_Post(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 
+	mux.Lock()
 	if count1 != 1 || count2 != 4 || count3 != 6 {
 		t.Fatalf("expect count1 = 1, count2 = 4, count3 = 6, got %d %d %d", count1, count2, count3)
 	}
+	mux.Unlock()
 }
 
 //nolint
@@ -107,49 +128,67 @@ func TestEventCollector_Full(t *testing.T) {
 	ec.Post(NewEvent(Event_ContractEvent, "test2"))
 	time.Sleep(time.Millisecond * 100)
 
+	var mux sync.Mutex
 	go func(ch <-chan *Event) {
 		t.Log("run sub1")
+		loop:
 		for {
 			select {
 			case e := <-ch:
 				if e.Topic != Event_TransactionResult {
 					t.Fatalf("sub1 expect event topic Event_TransactionResult, got %s", e.Topic.String())
 				}
+				mux.Lock()
 				count1++
+				mux.Unlock()
+			case <- time.After(1 * time.Second):
+				break loop
 			}
 		}
 	}(sub1.ReadChan())
 
 	go func(ch <-chan *Event) {
 		t.Log("run sub2")
+		loop:
 		for {
 			select {
 			case e := <-ch:
 				if e.Topic != Event_ContractEvent {
 					t.Fatalf("sub2 expect event topic Event_ContractEvent, got %s", e.Topic.String())
 				}
+				mux.Lock()
 				count2++
+				mux.Unlock()
+			case <- time.After(1 * time.Second):
+				break loop
 			}
 		}
 	}(sub2.ReadChan())
 
 	go func(ch <-chan *Event) {
 		t.Log("run sub3")
+		loop:
 		for {
 			select {
 			case e := <-ch:
 				if e.Topic != Event_TransactionResult && e.Topic != Event_ContractEvent {
 					t.Fatalf("sub3 expect event topic Event_TransactionResult or Event_ContractEvent, got %s", e.Topic.String())
 				}
+				mux.Lock()
 				count3++
+				mux.Unlock()
+			case <- time.After(1 * time.Second):
+				break loop
 			}
 		}
 	}(sub3.ReadChan())
 
 	time.Sleep(time.Millisecond * 100)
+	mux.Lock()
 	if count1 != 1 || count2 != 1 || count3 != 1 {
 		t.Fatalf("expect count1 = 1, count2 = 1, count3 = 1, got %d %d %d", count1, count2, count3)
 	}
+	mux.Unlock()
 
 	sub1 = NewSubscription(1000, []Event_Topic{Event_TransactionResult})
 	sub2 = NewSubscription(1000, []Event_Topic{Event_ContractEvent})
@@ -171,7 +210,9 @@ func TestEventCollector_Full(t *testing.T) {
 	t1 := time.Now().Nanosecond()
 	fmt.Println(t1 - t0)
 	time.Sleep(time.Millisecond * 100)
+	mux.Lock()
 	if count1 > 1001 || count2 != 1 || count3 > 1001 {
 		t.Fatalf("expect count1 <= 1001, count2 = 1, count3 <= 1001, got %d %d %d", count1, count2, count3)
 	}
+	mux.Unlock()
 }
