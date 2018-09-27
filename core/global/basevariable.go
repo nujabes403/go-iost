@@ -140,8 +140,7 @@ func New(conf *common.Config) (*BaseVariableImpl, error) {
 	var txDB TxDB
 	var err error
 	var witnessList []string
-	VoteContractPath = conf.Genesis.VoteContractPath
-
+	VoteContractPath = os.Getenv("GOPATH") + "/src/github.com/iost-official/Go-IOS-Protocol/config/"
 	for i := 0; i < len(conf.Genesis.WitnessInfo)/2; i++ {
 		witnessList = append(witnessList, conf.Genesis.WitnessInfo[2*i])
 	}

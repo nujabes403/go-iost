@@ -27,7 +27,7 @@ var (
 	errTxDup       = errors.New("duplicate tx")
 	errTxSignature = errors.New("tx wrong signature")
 	errHeadHash    = errors.New("wrong head hash")
-	txLimit        = 2000 //limit it to 2000
+	txLimit        = 10000 //limit it to 2000
 )
 
 func generateBlock(account *account.Account, txPool txpool.TxPool, db db.MVCCDB) (*block.Block, error) {
@@ -169,9 +169,12 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 			return fmt.Errorf("vote was incorrect, status:%v", blk.Receipts[0].Status)
 		}
 	}
-
+	ilog.Error("start to verify tx in txpool")
+	var totaltime time.Duration
 	for _, tx := range blk.Txs {
+		start := time.Now()
 		exist := txPool.ExistTxs(tx.Hash(), parent)
+		totaltime += time.Since(start)
 		if exist == txpool.FoundChain {
 			return errTxDup
 		} else if exist != txpool.FoundPending {
@@ -183,6 +186,12 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 			return errTxTooOld
 		}
 	}
+	avgTime := 0
+	if len(blk.Txs) != 0 {
+		avgTime = (int(totaltime) / len(blk.Txs)) / 1e3
+	}
+	ilog.Errorf("avgTime: %vus", avgTime)
+
 	return verifier.VerifyBlockWithVM(blk, db)
 }
 

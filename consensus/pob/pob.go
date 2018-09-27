@@ -347,13 +347,18 @@ func (p *PoB) blockLoop() {
 func (p *PoB) scheduleLoop() {
 	nextSchedule := timeUntilNextSchedule(time.Now().UnixNano())
 	ilog.Infof("nextSchedule: %.2f", time.Duration(nextSchedule).Seconds())
+	ilog.Errorf("staticProperty.WitnessList: %v", staticProperty.WitnessList)
 	for {
 		select {
 		case <-time.After(time.Duration(nextSchedule)):
 			ilog.Info(p.baseVariable.Mode())
+			ilog.Errorf("staticProperty.WitnessList: %v", staticProperty.WitnessList)
 			metricsMode.Set(float64(p.baseVariable.Mode()), nil)
 			if witnessOfSec(time.Now().Unix()) == p.account.ID {
+				ilog.Error(witnessOfSec(time.Now().Unix()))
+				ilog.Error(p.account.ID)
 				if p.baseVariable.Mode() == global.ModeNormal {
+					ilog.Error("go to gen block")
 					p.txPool.Lock()
 					blk, err := generateBlock(p.account, p.txPool, p.produceDB)
 					p.txPool.Release()
@@ -400,6 +405,7 @@ func (p *PoB) handleRecvBlock(blk *block.Block) error {
 func (p *PoB) addExistingBlock(blk *block.Block, parentBlock *block.Block) error {
 	node, _ := p.blockCache.Find(blk.HeadHash())
 	ok := p.verifyDB.Checkout(string(blk.HeadHash()))
+	ilog.Error("shifou zai qizhong %v", ok)
 	if !ok {
 		p.verifyDB.Checkout(string(blk.Head.ParentHash))
 		err := verifyBlock(blk, parentBlock, p.blockCache.LinkedRoot().Block, p.txPool, p.verifyDB)

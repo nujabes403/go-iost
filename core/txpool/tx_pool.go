@@ -15,6 +15,7 @@ import (
 	"github.com/iost-official/Go-IOS-Protocol/core/blockcache"
 	"github.com/iost-official/Go-IOS-Protocol/core/global"
 	"github.com/iost-official/Go-IOS-Protocol/core/tx"
+	"github.com/iost-official/Go-IOS-Protocol/ilog"
 	"github.com/iost-official/Go-IOS-Protocol/p2p"
 )
 
@@ -142,7 +143,7 @@ func (pool *TxPImpl) AddLinkedNode(linkedNode *blockcache.BlockCacheNode, newHea
 	case noForkBCN:
 		pool.mu.Lock()
 		defer pool.mu.Unlock()
-		pool.doChainChangeByTimeout() //?
+		pool.doChainChangeByTimeout()
 	case sameHead:
 	default:
 		return errors.New("failed to tFort")
@@ -180,6 +181,7 @@ func (pool *TxPImpl) DelTxList(delList []*tx.Tx) {
 
 // TxIterator ...
 func (pool *TxPImpl) TxIterator() (*Iterator, *blockcache.BlockCacheNode) {
+	ilog.Errorf("pendingTx.Size(): %v", pool.pendingTx.Size())
 	metricsTxPoolSize.Set(float64(pool.pendingTx.Size()), nil)
 	return pool.pendingTx.Iter(), pool.forkChain.NewHead
 }
@@ -187,21 +189,18 @@ func (pool *TxPImpl) TxIterator() (*Iterator, *blockcache.BlockCacheNode) {
 // ExistTxs determine if the transaction exists
 func (pool *TxPImpl) ExistTxs(hash []byte, chainBlock *block.Block) FRet {
 	start := time.Now()
-	defer func() {
-		cost := time.Since(start).Nanoseconds() / int64(time.Microsecond)
-		metricsExistTxTime.Observe(float64(cost), nil)
-		metricsExistTxCount.Add(1, nil)
-	}()
-	var r FRet
-	switch {
-	case pool.existTxInPending(hash):
-		r = FoundPending
-	case pool.existTxInChain1(hash, chainBlock):
-		r = FoundChain
-	default:
-		r = NotFound
-	}
-	return r
+	pool.existTxInPending(hash)
+	//var r FRet
+	//switch {
+	//case pool.existTxInPending(hash):
+	//	r = FoundPending
+	////case pool.existTxInChain2(hash, chainBlock):
+	////	r = FoundChain
+	//default:
+	//	r = NotFound
+	//}
+	ilog.Errorf("TIME FOR SWITCH: %v", time.Since(start))
+	return NotFound
 }
 
 func (pool *TxPImpl) initBlockTx() {
@@ -295,6 +294,18 @@ func (pool *TxPImpl) existTxInChain1(txHash []byte, block *block.Block) bool {
 	}
 }
 
+func (pool *TxPImpl) existTxInChain2(txHash []byte, block *block.Block) bool {
+	if block == nil {
+		return false
+	}
+	b, ok := pool.findBlock(block.HeadHash())
+	if !ok {
+		return false
+	}
+	_, ok = b.chainMap.Load(string(txHash))
+	return ok
+}
+
 func (pool *TxPImpl) existTxInBlock(txHash []byte, blockHash []byte) bool {
 	b, ok := pool.blockList.Load(string(blockHash))
 	if !ok {
@@ -332,7 +343,10 @@ func (pool *TxPImpl) addTx(tx *tx.Tx) TAddTx {
 }
 
 func (pool *TxPImpl) existTxInPending(hash []byte) bool {
-	return pool.pendingTx.Get(hash) != nil
+	start := time.Now()
+	judge := pool.pendingTx.Get(hash) != nil
+	ilog.Errorf("time for Get: %v %v", time.Since(start), judge)
+	return false
 }
 
 // TxTimeOut time to verify the tx

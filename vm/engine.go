@@ -71,8 +71,6 @@ func newEngine(bh *block.BlockHead, db *database.Visitor) Engine {
 
 	ctx = loadBlkInfo(ctx, bh)
 
-	//ilog.Error("iost.system is ", db.Contract("iost.system"))
-
 	if db.Contract("iost.system") == nil {
 		db.SetContract(native.ABI())
 	}
@@ -128,7 +126,6 @@ func (e *engineImpl) exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
 
 	txr := tx.NewTxReceipt(tx0.Hash())
 	hasSetCode := false
-	ilog.Error("before range loop")
 	for _, action := range tx0.Actions {
 
 		if hasSetCode && action.Contract == "iost.system" && action.ActionName == "SetCode" {
@@ -140,11 +137,9 @@ func (e *engineImpl) exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
 			break
 		}
 		hasSetCode = action.Contract == "iost.system" && action.ActionName == "SetCode"
-		ilog.Error("before runAction")
 		cost, status, receipts, err := e.runAction(*action)
 		ilog.Debugf("run action : %v, result is %v", action, status.Code)
 		if err != nil {
-			ilog.Error(err)
 			return nil, err
 		}
 
@@ -171,9 +166,7 @@ func (e *engineImpl) exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
 			txr.SuccActionNum++
 		}
 	}
-	ilog.Error("before DoPay")
 	err := e.ho.DoPay(e.ho.Context().Value("witness").(string), tx0.GasPrice)
-	ilog.Error("after DoPay")
 	if err != nil {
 		e.ho.DB().Rollback()
 		err = e.ho.DoPay(e.ho.Context().Value("witness").(string), tx0.GasPrice)
@@ -203,7 +196,6 @@ func (e *engineImpl) Exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
 		ilog.Error(errCannotPay)
 		return errReceipt(tx0.Hash(), tx.ErrorBalanceNotEnough, "publisher's balance less than price * limit"), errCannotPay
 	}
-	ilog.Error("before exec tx0")
 	return e.exec(tx0)
 }
 func (e *engineImpl) GC() {
@@ -287,12 +279,9 @@ func (e *engineImpl) runAction(action tx.Action) (cost *contract.Cost, status tx
 	defer func() {
 		e.ho.PopCtx()
 	}()
-	ilog.Error("before Context().Set")
 	e.ho.Context().Set("stack0", "direct_call")
 	e.ho.Context().Set("stack_height", 1) // record stack trace
-	ilog.Error("Before Call")
 	_, cost, err = staticMonitor.Call(e.ho, action.Contract, action.ActionName, action.Data)
-	ilog.Error("Call")
 
 	if cost == nil {
 		panic("cost is nil")

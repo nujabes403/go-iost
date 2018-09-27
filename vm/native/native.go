@@ -39,7 +39,6 @@ func (i *Impl) Compile(contract *contract.Contract) (string, error) {
 
 // LoadAndCall implement
 func (i *Impl) LoadAndCall(h *host.Host, con *contract.Contract, api string, args ...interface{}) (rtn []interface{}, cost *contract.Cost, err error) {
-	ilog.Error("in LoadAndCall")
 	var (
 		a  *abi
 		ok bool
@@ -48,7 +47,6 @@ func (i *Impl) LoadAndCall(h *host.Host, con *contract.Contract, api string, arg
 	switch con.ID {
 	case "iost.system":
 		a, ok = systemABIs[api]
-		ilog.Error(a)
 	case "iost.domain":
 		a, ok = domainABIs[api]
 	case "iost.coin":
@@ -60,6 +58,5 @@ func (i *Impl) LoadAndCall(h *host.Host, con *contract.Contract, api string, arg
 		ilog.Fatal("error", con.ID, api, systemABIs)
 		return nil, host.CommonErrorCost(1), errors.New("unknown api name")
 	}
-	ilog.Error("before do")
 	return a.do(h, args...)
 }
