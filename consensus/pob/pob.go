@@ -83,7 +83,6 @@ func NewPoB(account *account.Account, baseVariable global.BaseVariable, blockCac
 		chQueryBlock:    p2pService.Register("consensus query block", p2p.NewBlockRequest),
 		chVerifyBlock:   make(chan *verifyBlockMessage, 1024),
 	}
-
 	staticProperty = newStaticProperty(p.account, blockCache.LinkedRoot().Active())
 	return &p
 }
@@ -384,7 +383,6 @@ func (p *PoB) handleRecvBlock(blk *block.Block) error {
 func (p *PoB) addExistingBlock(blk *block.Block, parentBlock *block.Block) error {
 	node, _ := p.blockCache.Find(blk.HeadHash())
 	ok := p.verifyDB.Checkout(string(blk.HeadHash()))
-	ilog.Error("shifou zai qizhong %v", ok)
 	if !ok {
 		p.verifyDB.Checkout(string(blk.Head.ParentHash))
 		err := verifyBlock(blk, parentBlock, p.blockCache.LinkedRoot().Block, p.txPool, p.verifyDB)

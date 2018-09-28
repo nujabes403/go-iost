@@ -10,6 +10,8 @@ import (
 
 	"fmt"
 
+	"unsafe"
+
 	"github.com/iost-official/go-iost/common"
 	"github.com/iost-official/go-iost/core/block"
 	"github.com/iost-official/go-iost/core/blockcache"
@@ -192,7 +194,7 @@ func (pool *TxPImpl) ExistTxs(hash []byte, chainBlock *block.Block) FRet {
 	switch {
 	//case pool.existTxInPending(hash):
 	//	r = FoundPending
-	case pool.existTxInChain1(hash, chainBlock):
+	case pool.existTxInChain2(hash, chainBlock):
 		r = FoundChain
 	default:
 		r = NotFound
@@ -242,7 +244,7 @@ func (pool *TxPImpl) addBlock(blk *block.Block) error {
 		return nil
 	}
 	parentBlockTx, _ := pool.blockList.Load(string(blk.Head.ParentHash))
-	pool.blockList.Store(string(blk.HeadHash()), newBlockTx(blk, parentBlockTx))
+	pool.blockList.Store(string(blk.HeadHash()), pool.newBlockTx(blk, parentBlockTx))
 	return nil
 }
 
@@ -290,7 +292,6 @@ func (pool *TxPImpl) existTxInChain2(txHash []byte, block *block.Block) bool {
 		return false
 	}
 	b, ok := pool.findBlock(block.HeadHash())
-	ilog.Error("B:%v, OK:%v", b, ok)
 	if !ok {
 		return false
 	}
@@ -314,6 +315,23 @@ func (pool *TxPImpl) clearBlock() {
 		}
 		return true
 	})
+	listnum := 0
+	totalBytes := 0
+	pool.blockList.Range(func(key, value interface{}) bool {
+		listnum++
+		chainmaplength := 0
+		var keysize, valuesize uintptr
+		value.(*blockTx).chainMap.Range(func(key, value interface{}) bool {
+			chainmaplength++
+			keysize = unsafe.Sizeof(key)
+			valuesize = unsafe.Sizeof(value)
+			return true
+		})
+		ilog.Errorf("keysize: %v, valuesize: %v, chainmaplength: %v", keysize, valuesize, chainmaplength)
+		totalBytes += 8 * chainmaplength * int(keysize+valuesize)
+		return true
+	})
+	ilog.Errorf("totalBytes: %v", totalBytes)
 }
 
 func (pool *TxPImpl) addTx(tx *tx.Tx) TAddTx {
@@ -394,7 +412,7 @@ func (pool *TxPImpl) doChainChangeByForkBCN() {
 	newHead := pool.forkChain.NewHead
 	oldHead := pool.forkChain.OldHead
 	forkBCN := pool.forkChain.ForkBCN
-	//Reply to txs
+	//add txs
 	filterLimit := time.Now().UnixNano() - filterTime
 	for {
 		if oldHead == nil || oldHead == forkBCN || pool.slotToNSec(oldHead.Block.Head.Time) < filterLimit {
@@ -406,7 +424,7 @@ func (pool *TxPImpl) doChainChangeByForkBCN() {
 		oldHead = oldHead.Parent
 	}
 
-	//Check duplicate txs
+	//del txs
 	for {
 		if newHead == nil || newHead == forkBCN || pool.slotToNSec(newHead.Block.Head.Time) < filterLimit {
 			break

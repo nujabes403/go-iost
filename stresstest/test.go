@@ -8,11 +8,11 @@ import (
 
 	"sync"
 
-	"github.com/iost-official/Go-IOS-Protocol/account"
-	"github.com/iost-official/Go-IOS-Protocol/common"
-	"github.com/iost-official/Go-IOS-Protocol/core/tx"
-	"github.com/iost-official/Go-IOS-Protocol/crypto"
-	pb "github.com/iost-official/Go-IOS-Protocol/rpc"
+	"github.com/iost-official/go-iost/account"
+	"github.com/iost-official/go-iost/common"
+	"github.com/iost-official/go-iost/core/tx"
+	"github.com/iost-official/go-iost/crypto"
+	pb "github.com/iost-official/go-iost/rpc"
 	"google.golang.org/grpc"
 )
 

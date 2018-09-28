@@ -9,6 +9,7 @@ import (
 	"github.com/iost-official/go-iost/core/block"
 	"github.com/iost-official/go-iost/core/blockcache"
 	"github.com/iost-official/go-iost/core/tx"
+	"github.com/iost-official/go-iost/ilog"
 	"github.com/iost-official/go-iost/metrics"
 )
 
@@ -104,23 +105,37 @@ type blockTx struct {
 	time       int64
 }
 
-func newBlockTx(blk *block.Block, parentBlockTx interface{}) *blockTx {
+func (pool *TxPImpl) newBlockTx(blk *block.Block, parentBlockTx interface{}) *blockTx {
+	ilog.Errorf("new block number: %v", blk.Head.Number)
 	b := &blockTx{
 		chainMap:   new(sync.Map),
 		txMap:      new(sync.Map),
 		ParentHash: blk.Head.ParentHash,
 		time:       common.SlotLength * blk.Head.Time * int64(time.Second),
 	}
+	prevcnt := 0
+	nowcnt := 0
+	delcnt := 0
+	addcnt := 0
 	if parentBlockTx != nil {
-		parentBlockTx.(*blockTx).txMap.Range(func(key, value interface{}) bool {
-			b.chainMap.Store(key, value)
+		parentBlockTx.(*blockTx).chainMap.Range(func(key, value interface{}) bool {
+			prevcnt += 1
+			if !pool.TxTimeOut(value.(*tx.Tx)) {
+				nowcnt += 1
+				b.chainMap.Store(key, value)
+			} else {
+				delcnt += 1
+			}
 			return true
 		})
 	}
 	for _, v := range blk.Txs {
+		nowcnt += 1
+		addcnt += 1
 		b.chainMap.Store(string(v.Hash()), v)
 		b.txMap.Store(string(v.Hash()), v)
 	}
+	ilog.Errorf("new block number: %v, prevcnt: %v, nowcnt: %v, addcnt: %v, delcnt: %v", blk.Head.Number, prevcnt, nowcnt, addcnt, delcnt)
 	return b
 }
 

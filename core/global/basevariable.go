@@ -5,6 +5,8 @@ import (
 
 	"os"
 
+	"time"
+
 	"github.com/iost-official/go-iost/account"
 	"github.com/iost-official/go-iost/common"
 	"github.com/iost-official/go-iost/consensus/verifier"
@@ -15,7 +17,6 @@ import (
 	"github.com/iost-official/go-iost/db"
 	"github.com/iost-official/go-iost/vm"
 	"github.com/iost-official/go-iost/vm/native"
-	"time"
 )
 
 // TMode type of mode
@@ -147,13 +148,8 @@ func New(conf *common.Config) (*BaseVariableImpl, error) {
 	var txDB TxDB
 	var err error
 	var witnessList []string
-<<<<<<< HEAD
-	VoteContractPath = os.Getenv("GOPATH") + "/src/github.com/iost-official/Go-IOS-Protocol/config/"
-=======
 	VoteContractPath = conf.Genesis.VoteContractPath
 	adminID = conf.Genesis.AdminID
-
->>>>>>> develop
 	for i := 0; i < len(conf.Genesis.WitnessInfo)/2; i++ {
 		witnessList = append(witnessList, conf.Genesis.WitnessInfo[2*i])
 	}
