@@ -8,17 +8,16 @@ import (
 	"fmt"
 
 	"github.com/golang/mock/gomock"
-	"github.com/iost-official/Go-IOS-Protocol/account"
-	"github.com/iost-official/Go-IOS-Protocol/consensus/synchronizer"
-	"github.com/iost-official/Go-IOS-Protocol/core/block"
-	"github.com/iost-official/Go-IOS-Protocol/core/blockcache"
-	"github.com/iost-official/Go-IOS-Protocol/core/global"
-	"github.com/iost-official/Go-IOS-Protocol/core/tx"
-	"github.com/iost-official/Go-IOS-Protocol/core/txpool"
-	"github.com/iost-official/Go-IOS-Protocol/crypto"
-	"github.com/iost-official/Go-IOS-Protocol/ilog"
-	"github.com/iost-official/Go-IOS-Protocol/p2p"
-	"github.com/iost-official/Go-IOS-Protocol/p2p/mocks"
+	"github.com/iost-official/go-iost/account"
+	"github.com/iost-official/go-iost/core/block"
+	"github.com/iost-official/go-iost/core/blockcache"
+	"github.com/iost-official/go-iost/core/global"
+	"github.com/iost-official/go-iost/core/tx"
+	"github.com/iost-official/go-iost/core/txpool"
+	"github.com/iost-official/go-iost/crypto"
+	"github.com/iost-official/go-iost/ilog"
+	"github.com/iost-official/go-iost/p2p"
+	"github.com/iost-official/go-iost/p2p/mocks"
 )
 
 func testRun(t *testing.T) {
@@ -54,9 +53,8 @@ func testRun(t *testing.T) {
 	mockP2PService := p2p_mock.NewMockService(mockController)
 	channel := make(chan p2p.IncomingMessage, 1024)
 	mockP2PService.EXPECT().Register(gomock.Any(), gomock.Any()).Return(channel).AnyTimes()
-	txPool, _ := txpool.NewTxPoolImpl(baseVariable, blockCache, mockP2PService)               //mock
-	synchronizer, _ := synchronizer.NewSynchronizer(baseVariable, blockCache, mockP2PService) //mock
-	pob := NewPoB(account1, baseVariable, blockCache, txPool, mockP2PService, synchronizer)
+	txPool, _ := txpool.NewTxPoolImpl(baseVariable, blockCache, mockP2PService) //mock
+	pob := NewPoB(account1, baseVariable, blockCache, txPool, mockP2PService)
 	pob.Start()
 	fmt.Println(time.Now().Second())
 	fmt.Println(time.Now().Nanosecond())

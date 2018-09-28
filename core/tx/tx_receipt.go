@@ -2,7 +2,7 @@ package tx
 
 import (
 	"github.com/golang/protobuf/proto"
-	"github.com/iost-official/Go-IOS-Protocol/common"
+	"github.com/iost-official/go-iost/common"
 )
 
 // StatusCode status code of transaction execution result
@@ -13,8 +13,9 @@ const (
 	Success StatusCode = iota
 	ErrorGasRunOut
 	ErrorBalanceNotEnough
-	ErrorParamter         // parameter mismatch when calling function
-	ErrorRuntime          // runtime error
+	ErrorParamter // parameter mismatch when calling function
+	ErrorRuntime  // runtime error
+	ErrorTimeout
 	ErrorTxFormat         // tx format errors
 	ErrorDuplicateSetCode // more than one set code action in a tx
 	ErrorUnknown          // other errors
@@ -131,7 +132,7 @@ func (r *TxReceipt) Decode(b []byte) error {
 
 // Hash return byte hash
 func (r *TxReceipt) Hash() []byte {
-	return common.Sha256(r.Encode())
+	return common.Sha3(r.Encode())
 }
 
 func (r *TxReceipt) String() string {

@@ -17,9 +17,11 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/iost-official/Go-IOS-Protocol/core/tx"
-	"github.com/iost-official/Go-IOS-Protocol/vm"
-	"github.com/iost-official/Go-IOS-Protocol/vm/database"
+	"time"
+
+	"github.com/iost-official/go-iost/core/tx"
+	"github.com/iost-official/go-iost/vm"
+	"github.com/iost-official/go-iost/vm/database"
 	"github.com/spf13/cobra"
 )
 
@@ -49,7 +51,7 @@ Usage:
 		tx0, err := database.LoadTxInfo("tx_info.json")
 		tx0.Actions = []*tx.Action{&action}
 
-		fmt.Println(eg.Exec(tx0))
+		fmt.Println(eg.Exec(tx0, time.Second))
 
 		db.Save("after.json")
 	},

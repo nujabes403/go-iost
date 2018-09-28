@@ -7,8 +7,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/iost-official/Go-IOS-Protocol/ilog"
-	"github.com/iost-official/Go-IOS-Protocol/p2p"
+	"github.com/iost-official/go-iost/ilog"
+	"github.com/iost-official/go-iost/p2p"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -30,7 +30,7 @@ type message struct {
 func newMessage(content string, from string) *message {
 	id, _ := uuid.NewV4()
 	return &message{
-		ID:      string(id.Bytes()),
+		ID:      id.String(),
 		Content: content,
 		From:    from,
 	}

@@ -7,17 +7,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/iost-official/Go-IOS-Protocol/account"
-	"github.com/iost-official/Go-IOS-Protocol/common"
-	"github.com/iost-official/Go-IOS-Protocol/consensus/verifier"
-	"github.com/iost-official/Go-IOS-Protocol/core/block"
-	"github.com/iost-official/Go-IOS-Protocol/core/blockcache"
-	"github.com/iost-official/Go-IOS-Protocol/core/tx"
-	"github.com/iost-official/Go-IOS-Protocol/core/txpool"
-	"github.com/iost-official/Go-IOS-Protocol/crypto"
-	"github.com/iost-official/Go-IOS-Protocol/db"
-	"github.com/iost-official/Go-IOS-Protocol/ilog"
-	"github.com/iost-official/Go-IOS-Protocol/vm"
+	"github.com/iost-official/go-iost/account"
+	"github.com/iost-official/go-iost/common"
+	"github.com/iost-official/go-iost/consensus/verifier"
+	"github.com/iost-official/go-iost/core/block"
+	"github.com/iost-official/go-iost/core/blockcache"
+	"github.com/iost-official/go-iost/core/tx"
+	"github.com/iost-official/go-iost/core/txpool"
+	"github.com/iost-official/go-iost/crypto"
+	"github.com/iost-official/go-iost/db"
+	"github.com/iost-official/go-iost/ilog"
+	"github.com/iost-official/go-iost/vm"
 )
 
 var (
@@ -28,6 +28,7 @@ var (
 	errTxSignature = errors.New("tx wrong signature")
 	errHeadHash    = errors.New("wrong head hash")
 	txLimit        = 10000 //limit it to 2000
+	txExecTime     = verifier.TxExecTimeLimit / 2
 )
 
 func generateBlock(account *account.Account, txPool txpool.TxPool, db db.MVCCDB) (*block.Block, error) {
@@ -60,7 +61,7 @@ func generateBlock(account *account.Account, txPool txpool.TxPool, db db.MVCCDB)
 		if err != nil {
 			ilog.Errorf("fail to signTx, err:%v", err)
 		}
-		receipt, err := engine.Exec(trx)
+		receipt, err := engine.Exec(trx, txExecTime)
 		if err != nil {
 			ilog.Errorf("fail to exec trx, err:%v", err)
 		}
@@ -84,7 +85,7 @@ L:
 			step1 := time.Now()
 			if !txPool.TxTimeOut(t) {
 				j++
-				if receipt, err := engine.Exec(t); err == nil {
+				if receipt, err := engine.Exec(t, txExecTime); err == nil {
 					blk.Txs = append(blk.Txs, t)
 					blk.Receipts = append(blk.Receipts, receipt)
 				} else {
@@ -103,17 +104,6 @@ L:
 			vmExecTime += step2.Sub(step1).Nanoseconds()
 			iterTime += step3.Sub(step2).Nanoseconds()
 		}
-	}
-
-	if i > 0 && j > 0 {
-		metricsVMTime.Set(float64(vmExecTime), nil)
-		metricsVMAvgTime.Set(float64(vmExecTime/j), nil)
-		metricsIterTime.Set(float64(iterTime), nil)
-		metricsIterAvgTime.Set(float64(iterTime/j), nil)
-		metricsNonTimeOutTxSize.Set(float64(j), nil)
-		metricsAllTxSize.Set(float64(i), nil)
-		ilog.Infof("tx in blk:%d, iter:%d, vmExecTime:%d, vmAvgTime:%d, iterTime:%d, iterAvgTime:%d",
-			len(blk.Txs), i, vmExecTime, vmExecTime/j, iterTime, iterTime/j)
 	}
 
 	blk.Head.TxsHash = blk.CalculateTxsHash()

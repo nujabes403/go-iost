@@ -5,16 +5,17 @@ import (
 
 	"os"
 
-	"github.com/iost-official/Go-IOS-Protocol/account"
-	"github.com/iost-official/Go-IOS-Protocol/common"
-	"github.com/iost-official/Go-IOS-Protocol/consensus/verifier"
-	"github.com/iost-official/Go-IOS-Protocol/core/block"
-	"github.com/iost-official/Go-IOS-Protocol/core/contract"
-	"github.com/iost-official/Go-IOS-Protocol/core/tx"
-	"github.com/iost-official/Go-IOS-Protocol/crypto"
-	"github.com/iost-official/Go-IOS-Protocol/db"
-	"github.com/iost-official/Go-IOS-Protocol/vm"
-	"github.com/iost-official/Go-IOS-Protocol/vm/native"
+	"github.com/iost-official/go-iost/account"
+	"github.com/iost-official/go-iost/common"
+	"github.com/iost-official/go-iost/consensus/verifier"
+	"github.com/iost-official/go-iost/core/block"
+	"github.com/iost-official/go-iost/core/contract"
+	"github.com/iost-official/go-iost/core/tx"
+	"github.com/iost-official/go-iost/crypto"
+	"github.com/iost-official/go-iost/db"
+	"github.com/iost-official/go-iost/vm"
+	"github.com/iost-official/go-iost/vm/native"
+	"time"
 )
 
 // TMode type of mode
@@ -31,6 +32,10 @@ const (
 
 // VoteContractPath is config of vote
 var VoteContractPath = "../../config/"
+var adminID = ""
+
+// GenesisTxExecTime is the maximum execution time of a transaction in genesis block
+var GenesisTxExecTime = 1 * time.Second
 
 // String return string of mode
 func (m TMode) String() string {
@@ -90,6 +95,8 @@ func GenGenesis(db db.MVCCDB, witnessInfo []string) (*block.Block, error) {
 		act1 := tx.NewAction("iost.vote", "InitProducer", fmt.Sprintf(`["%v"]`, witnessInfo[2*i]))
 		acts = append(acts, &act1)
 	}
+	act11 := tx.NewAction("iost.vote", "InitAdmin", fmt.Sprintf(`["%v"]`, adminID))
+	acts = append(acts, &act11)
 
 	// deploy iost.bonus
 	act2 := tx.NewAction("iost.system", "InitSetCode", fmt.Sprintf(`["%v", "%v"]`, "iost.bonus", native.BonusABI().B64Encode()))
@@ -113,7 +120,7 @@ func GenGenesis(db db.MVCCDB, witnessInfo []string) (*block.Block, error) {
 		Time:       0,
 	}
 	engine := vm.NewEngine(&blockHead, db)
-	txr, err := engine.Exec(trx)
+	txr, err := engine.Exec(trx, GenesisTxExecTime)
 	if err != nil || txr.Status.Code != tx.Success {
 		return nil, fmt.Errorf("exec tx failed, stop the pogram. err: %v, receipt: %v", err, txr)
 	}
@@ -140,7 +147,13 @@ func New(conf *common.Config) (*BaseVariableImpl, error) {
 	var txDB TxDB
 	var err error
 	var witnessList []string
+<<<<<<< HEAD
 	VoteContractPath = os.Getenv("GOPATH") + "/src/github.com/iost-official/Go-IOS-Protocol/config/"
+=======
+	VoteContractPath = conf.Genesis.VoteContractPath
+	adminID = conf.Genesis.AdminID
+
+>>>>>>> develop
 	for i := 0; i < len(conf.Genesis.WitnessInfo)/2; i++ {
 		witnessList = append(witnessList, conf.Genesis.WitnessInfo[2*i])
 	}
@@ -233,10 +246,10 @@ func FakeNew() (*BaseVariableImpl, error) {
 	}
 	config := common.Config{}
 	config.VM = &common.VMConfig{}
-	config.VM.JsPath = os.Getenv("GOPATH") + "/src/github.com/iost-official/Go-IOS-Protocol/vm/v8vm/v8/libjs/"
+	config.VM.JsPath = os.Getenv("GOPATH") + "/src/github.com/iost-official/go-iost/vm/v8vm/v8/libjs/"
 
 	vm.SetUp(config.VM)
-	VoteContractPath = os.Getenv("GOPATH") + "/src/github.com/iost-official/Go-IOS-Protocol/config/"
+	VoteContractPath = os.Getenv("GOPATH") + "/src/github.com/iost-official/go-iost/config/"
 	fmt.Println(VoteContractPath)
 	fmt.Println(config.VM.JsPath)
 	blk, err := GenGenesis(stateDB, []string{"a1", "11111111111", "a2", "2222", "a3", "333"})

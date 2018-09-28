@@ -10,13 +10,13 @@ import (
 
 	"fmt"
 
-	"github.com/iost-official/Go-IOS-Protocol/common"
-	"github.com/iost-official/Go-IOS-Protocol/core/block"
-	"github.com/iost-official/Go-IOS-Protocol/core/blockcache"
-	"github.com/iost-official/Go-IOS-Protocol/core/global"
-	"github.com/iost-official/Go-IOS-Protocol/core/tx"
-	"github.com/iost-official/Go-IOS-Protocol/ilog"
-	"github.com/iost-official/Go-IOS-Protocol/p2p"
+	"github.com/iost-official/go-iost/common"
+	"github.com/iost-official/go-iost/core/block"
+	"github.com/iost-official/go-iost/core/blockcache"
+	"github.com/iost-official/go-iost/core/global"
+	"github.com/iost-official/go-iost/core/tx"
+	"github.com/iost-official/go-iost/ilog"
+	"github.com/iost-official/go-iost/p2p"
 )
 
 // TxPImpl defines all the API of txpool package.
@@ -218,12 +218,6 @@ func (pool *TxPImpl) verifyTx(t *tx.Tx) TAddTx {
 	if pool.pendingTx.Size() > maxCacheTxs {
 		return CacheFullError
 	}
-	start := time.Now()
-	defer func(t time.Time) {
-		cost := time.Since(start).Nanoseconds() / int64(time.Microsecond)
-		metricsVerifyTxTime.Observe(float64(cost), nil)
-		metricsVerifyTxCount.Add(1, nil)
-	}(start)
 	if t.GasPrice <= 0 {
 		return GasPriceError
 	}
@@ -323,12 +317,6 @@ func (pool *TxPImpl) clearBlock() {
 }
 
 func (pool *TxPImpl) addTx(tx *tx.Tx) TAddTx {
-	start := time.Now()
-	defer func(t time.Time) {
-		cost := time.Since(start).Nanoseconds() / int64(time.Microsecond)
-		metricsAddTxTime.Observe(float64(cost), nil)
-		metricsAddTxCount.Add(1, nil)
-	}(start)
 	h := tx.Hash()
 	if pool.existTxInChain1(h, pool.forkChain.NewHead.Block) {
 		return DupError
@@ -348,15 +336,12 @@ func (pool *TxPImpl) existTxInPending(hash []byte) bool {
 func (pool *TxPImpl) TxTimeOut(tx *tx.Tx) bool {
 	currentTime := time.Now().UnixNano()
 	if tx.Time > currentTime {
-		metricsTxErrType.Add(1, map[string]string{"type": "txTime > currentTime"})
 		return true
 	}
 	if tx.Expiration <= currentTime {
-		metricsTxErrType.Add(1, map[string]string{"type": "exTime <= currentTime"})
 		return true
 	}
 	if currentTime-tx.Time > Expiration {
-		metricsTxErrType.Add(1, map[string]string{"type": "nTime-txTime > expiration"})
 		return true
 	}
 	return false

@@ -38,8 +38,8 @@ import (
 
 	"sync"
 
-	"github.com/iost-official/Go-IOS-Protocol/core/contract"
-	"github.com/iost-official/Go-IOS-Protocol/vm/host"
+	"github.com/iost-official/go-iost/core/contract"
+	"github.com/iost-official/go-iost/vm/host"
 )
 
 // Sandbox is an execution environment that allows separate, unrelated, JavaScript
@@ -189,8 +189,9 @@ obj.%s(%s)
 func (sbx *Sandbox) Execute(preparedCode string) (string, int64, error) {
 	cCode := C.CString(preparedCode)
 	defer C.free(unsafe.Pointer(cCode))
+	expireTime := C.longlong(sbx.host.Deadline().UnixNano())
 
-	rs := C.Execute(sbx.context, cCode)
+	rs := C.Execute(sbx.context, cCode, expireTime)
 
 	result := C.GoString(rs.Value)
 	defer C.free(unsafe.Pointer(rs.Value))

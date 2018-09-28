@@ -6,16 +6,18 @@ import (
 	"runtime"
 	"strings"
 
+	"time"
+
 	"github.com/bitly/go-simplejson"
-	"github.com/iost-official/Go-IOS-Protocol/account"
-	"github.com/iost-official/Go-IOS-Protocol/common"
-	"github.com/iost-official/Go-IOS-Protocol/core/block"
-	"github.com/iost-official/Go-IOS-Protocol/core/contract"
-	"github.com/iost-official/Go-IOS-Protocol/core/tx"
-	"github.com/iost-official/Go-IOS-Protocol/ilog"
-	"github.com/iost-official/Go-IOS-Protocol/vm/database"
-	"github.com/iost-official/Go-IOS-Protocol/vm/host"
-	"github.com/iost-official/Go-IOS-Protocol/vm/native"
+	"github.com/iost-official/go-iost/account"
+	"github.com/iost-official/go-iost/common"
+	"github.com/iost-official/go-iost/core/block"
+	"github.com/iost-official/go-iost/core/contract"
+	"github.com/iost-official/go-iost/core/tx"
+	"github.com/iost-official/go-iost/ilog"
+	"github.com/iost-official/go-iost/vm/database"
+	"github.com/iost-official/go-iost/vm/host"
+	"github.com/iost-official/go-iost/vm/native"
 )
 
 const (
@@ -31,7 +33,7 @@ var (
 // Engine the smart contract engine
 type Engine interface {
 	SetUp(k, v string) error
-	Exec(tx0 *tx.Tx) (*tx.TxReceipt, error)
+	Exec(tx0 *tx.Tx, limit time.Duration) (*tx.TxReceipt, error)
 	GC()
 }
 
@@ -174,14 +176,14 @@ func (e *engineImpl) exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
 			ilog.Error(err.Error())
 			return nil, err
 		}
-	} else {
-		e.ho.DB().Commit()
 	}
 
 	return &txr, nil
 }
 
-func (e *engineImpl) Exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
+func (e *engineImpl) Exec(tx0 *tx.Tx, limit time.Duration) (*tx.TxReceipt, error) {
+	e.ho.SetDeadline(time.Now().Add(limit))
+
 	ilog.Debug("exec : ", tx0.Actions[0].Contract, tx0.Actions[0].ActionName)
 	err := checkTx(tx0)
 	if err != nil {
@@ -196,7 +198,13 @@ func (e *engineImpl) Exec(tx0 *tx.Tx) (*tx.TxReceipt, error) {
 		ilog.Error(errCannotPay)
 		return errReceipt(tx0.Hash(), tx.ErrorBalanceNotEnough, "publisher's balance less than price * limit"), errCannotPay
 	}
-	return e.exec(tx0)
+	tr, err := e.exec(tx0)
+	if err != nil {
+		e.ho.DB().Rollback()
+	} else {
+		e.ho.DB().Commit()
+	}
+	return tr, err
 }
 func (e *engineImpl) GC() {
 	e.logger.Stop()
@@ -288,10 +296,19 @@ func (e *engineImpl) runAction(action tx.Action) (cost *contract.Cost, status tx
 	}
 
 	if err != nil {
-		status = tx.Status{
-			Code:    tx.ErrorRuntime,
-			Message: err.Error(),
+
+		if strings.Contains(err.Error(), "execution killed") {
+			status = tx.Status{
+				Code:    tx.ErrorTimeout,
+				Message: err.Error(),
+			}
+		} else {
+			status = tx.Status{
+				Code:    tx.ErrorRuntime,
+				Message: err.Error(),
+			}
 		}
+
 		receipt := tx.Receipt{
 			Type:    tx.SystemDefined,
 			Content: err.Error(),

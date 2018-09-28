@@ -20,6 +20,7 @@ genesis:
   - "IOSTCJqjtLBntuWRGaZumevYgBEZsU8AaAdUpEMnpGieKV676B9St"
   - "1370000000000000000"
   votecontractpath: config/
+  adminid: IOSTbbKmaZi1QRMfd7K8bK22KQSFuKadLhSNBw6tmyCHCRSvTr9QN
 vm:
   jspath: vm/v8vm/v8/libjs/
   loglevel: ""

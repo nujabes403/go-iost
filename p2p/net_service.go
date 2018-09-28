@@ -8,17 +8,18 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/iost-official/Go-IOS-Protocol/common"
-	"github.com/iost-official/Go-IOS-Protocol/ilog"
+	"github.com/iost-official/go-iost/common"
+	"github.com/iost-official/go-iost/ilog"
 	libp2p "github.com/libp2p/go-libp2p"
 	crypto "github.com/libp2p/go-libp2p-crypto"
 	host "github.com/libp2p/go-libp2p-host"
 	libnet "github.com/libp2p/go-libp2p-net"
 	peer "github.com/libp2p/go-libp2p-peer"
 	multiaddr "github.com/multiformats/go-multiaddr"
+	mplex "github.com/whyrusleeping/go-smux-multiplex"
 )
 
-//go:generate mockgen -destination mocks/mock_service.go -package p2p_mock github.com/iost-official/Go-IOS-Protocol/p2p Service
+//go:generate mockgen -destination mocks/mock_service.go -package p2p_mock github.com/iost-official/go-iost/p2p Service
 
 // PeerID is the alias of peer.ID
 type PeerID = peer.ID
@@ -153,6 +154,7 @@ func (ns *NetService) startHost(pk crypto.PrivKey, listenAddr string) (host.Host
 		libp2p.Identity(pk),
 		libp2p.NATPortMap(),
 		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/%s/tcp/%d", tcpAddr.IP, tcpAddr.Port)),
+		libp2p.Muxer(mplex.DefaultTransport),
 	}
 	h, err := libp2p.New(context.Background(), opts...)
 	if err != nil {

@@ -5,10 +5,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/iost-official/Go-IOS-Protocol/core/contract"
-	"github.com/iost-official/Go-IOS-Protocol/vm/database"
-	"github.com/iost-official/Go-IOS-Protocol/vm/host"
-	"github.com/iost-official/Go-IOS-Protocol/vm/native"
+	"time"
+
+	"github.com/iost-official/go-iost/core/contract"
+	"github.com/iost-official/go-iost/vm/database"
+	"github.com/iost-official/go-iost/vm/host"
+	"github.com/iost-official/go-iost/vm/native"
 )
 
 var testDataPath = "./test_data/"
@@ -29,6 +31,7 @@ func MyInit(t *testing.T, conName string, optional ...interface{}) (*native.Impl
 
 	pm := NewMonitor()
 	h := host.NewHost(ctx, vi, pm, nil)
+	h.Context().Set("stack_height", 0)
 
 	code := &contract.Contract{
 		ID: "iost.system",
@@ -57,6 +60,7 @@ func ReadFile(src string) ([]byte, error) {
 func TestEngine_SetCode(t *testing.T) {
 	e, host, code := MyInit(t, "setcode")
 	host.Context().Set("tx_hash", "iamhash")
+	host.SetDeadline(time.Now().Add(10 * time.Second))
 	hash := "Contractiamhash"
 
 	rawCode, err := ReadFile(testDataPath + "test.js")
@@ -101,7 +105,7 @@ func TestEngine_SetCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compiler parse error: %v\n", err)
 	}
-	rs, _, err = e.LoadAndCall(host, code, "UpdateCode", con.Encode(), "")
+	rs, _, err = e.LoadAndCall(host, code, "UpdateCode", con.B64Encode(), "")
 	if err != nil {
 		t.Fatalf("LoadAndCall update error: %v\n", err)
 	}
@@ -114,7 +118,7 @@ func TestEngine_SetCode(t *testing.T) {
 		t.Fatalf("LoadAndCall destroy error: %v\n", err)
 	}
 
-	_, _, err = e.LoadAndCall(host, code, "UpdateCode", con.Encode(), "")
+	_, _, err = e.LoadAndCall(host, code, "UpdateCode", con.B64Encode(), "")
 	if err == nil || err.Error() != "contract not exists" {
 		t.Fatalf("LoadAndCall for should return contract not exists, but got %v\n", err)
 	}
