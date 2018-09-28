@@ -188,19 +188,16 @@ func (pool *TxPImpl) TxIterator() (*Iterator, *blockcache.BlockCacheNode) {
 
 // ExistTxs determine if the transaction exists
 func (pool *TxPImpl) ExistTxs(hash []byte, chainBlock *block.Block) FRet {
-	start := time.Now()
-	pool.existTxInPending(hash)
-	//var r FRet
-	//switch {
+	var r FRet
+	switch {
 	//case pool.existTxInPending(hash):
 	//	r = FoundPending
-	////case pool.existTxInChain2(hash, chainBlock):
-	////	r = FoundChain
-	//default:
-	//	r = NotFound
-	//}
-	ilog.Errorf("TIME FOR SWITCH: %v", time.Since(start))
-	return NotFound
+	case pool.existTxInChain1(hash, chainBlock):
+		r = FoundChain
+	default:
+		r = NotFound
+	}
+	return r
 }
 
 func (pool *TxPImpl) initBlockTx() {
@@ -299,6 +296,7 @@ func (pool *TxPImpl) existTxInChain2(txHash []byte, block *block.Block) bool {
 		return false
 	}
 	b, ok := pool.findBlock(block.HeadHash())
+	ilog.Error("B:%v, OK:%v", b, ok)
 	if !ok {
 		return false
 	}
@@ -343,10 +341,7 @@ func (pool *TxPImpl) addTx(tx *tx.Tx) TAddTx {
 }
 
 func (pool *TxPImpl) existTxInPending(hash []byte) bool {
-	start := time.Now()
-	judge := pool.pendingTx.Get(hash) != nil
-	ilog.Errorf("time for Get: %v %v", time.Since(start), judge)
-	return false
+	return pool.pendingTx.Get(hash) != nil
 }
 
 // TxTimeOut time to verify the tx

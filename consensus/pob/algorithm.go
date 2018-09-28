@@ -170,25 +170,24 @@ func verifyBlock(blk *block.Block, parent *block.Block, lib *block.Block, txPool
 		}
 	}
 	ilog.Error("start to verify tx in txpool")
-	var totaltime time.Duration
+	start := time.Now()
 	for _, tx := range blk.Txs {
-		start := time.Now()
-		exist := txPool.ExistTxs(tx.Hash(), parent)
-		totaltime += time.Since(start)
-		if exist == txpool.FoundChain {
-			return errTxDup
-		} else if exist != txpool.FoundPending {
-			if err := tx.VerifySelf(); err != nil {
-				return errTxSignature
-			}
-		}
-		if blk.Head.Time*common.SlotLength-tx.Time/1e9 > txpool.Expiration {
-			return errTxTooOld
-		}
+		txPool.ExistTxs(tx.Hash(), parent)
+		//exist :=
+		//if exist == txpool.FoundChain {
+		//	return errTxDup
+		//} else if exist != txpool.FoundPending {
+		//	if err := tx.VerifySelf(); err != nil {
+		//		return errTxSignature
+		//	}
+		//}
+		//if blk.Head.Time*common.SlotLength-tx.Time/1e9 > txpool.Expiration {
+		//	return errTxTooOld
+		//}
 	}
 	avgTime := 0
 	if len(blk.Txs) != 0 {
-		avgTime = (int(totaltime) / len(blk.Txs)) / 1e3
+		avgTime = (int(time.Since(start)) / len(blk.Txs)) / 1e3
 	}
 	ilog.Errorf("avgTime: %vus", avgTime)
 
